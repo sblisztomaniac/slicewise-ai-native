@@ -14,8 +14,10 @@ export interface Safe {
 }
 
 export interface OwnershipData {
+  id: string;
   name: string;
   shares: number;
-  percentage: number;
+  ownership: number; // percentage of ownership
+  type: 'founder' | 'safe' | 'esop' | 'other';
   color: string;
 }

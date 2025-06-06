@@ -47,31 +47,54 @@ export const calculateOwnership = (
   // Calculate SAFE shares if applicable
   const safeShares = safe ? calculateSafeShares(safe, totalFounderShares) : 0;
   
-  // Calculate total shares including SAFE
-  const totalShares = totalFounderShares + safeShares;
+  // Calculate total shares including SAFE (pre-ESOP)
+  const preEsopShares = totalFounderShares + safeShares;
+  
+  // Calculate ESOP pool (10% of post-ESOP total, which is 11.11% of pre-ESOP total)
+  const esopPool = Math.round((preEsopShares / 9) * 1); // 10% of post-ESOP = 11.11% of pre-ESOP
+  
+  // Calculate total shares including ESOP
+  const totalShares = preEsopShares + esopPool;
   
   // Generate ownership data for visualization
   let ownershipData: OwnershipData[] = [];
   
   // Add founders to ownership data
   founders.forEach((founder, index) => {
-    const percentage = totalShares > 0 ? (founder.shares / totalShares) * 100 : 0;
+    const ownership = (founder.shares / totalShares) * 100;
     ownershipData.push({
+      id: founder.id,
       name: founder.name,
       shares: founder.shares,
-      percentage,
+      ownership,
+      type: 'founder',
       color: colors[index % colors.length],
     });
   });
   
   // Add SAFE to ownership data if it exists
   if (safe && safeShares > 0) {
-    const percentage = (safeShares / totalShares) * 100;
+    const safeOwnership = (safeShares / totalShares) * 100;
     ownershipData.push({
+      id: safe.id,
       name: safe.name,
       shares: safeShares,
-      percentage,
-      color: colors[founders.length % colors.length],
+      ownership: safeOwnership,
+      type: 'safe',
+      color: '#6B7280', // Gray color for SAFE
+    });
+  }
+  
+  // Add ESOP pool to ownership data
+  if (esopPool > 0) {
+    const esopOwnership = (esopPool / totalShares) * 100;
+    ownershipData.push({
+      id: 'esop-pool',
+      name: 'ESOP Pool (10%)',
+      shares: esopPool,
+      ownership: esopOwnership,
+      type: 'esop',
+      color: '#F59E0B', // Amber color for ESOP
     });
   }
   

@@ -101,25 +101,36 @@ export const CapTableProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const loadSampleData = () => {
+    // Clear existing data first
+    clearTable();
+    
+    // Add 2 founders
+    const founder1Id = generateId();
+    const founder2Id = generateId();
+    
     setFounders([
       {
-        id: generateId(),
-        name: 'Nova (CEO)',
-        shares: 1000000,
+        id: founder1Id,
+        name: 'Founder 1 (CEO)',
+        shares: 4500000, // 45%
       },
       {
-        id: generateId(),
-        name: 'Alex (CTO)',
-        shares: 750000,
+        id: founder2Id,
+        name: 'Founder 2 (CTO)',
+        shares: 4500000, // 45%
       },
     ]);
 
+    // Add SAFE (10% of company post-money)
     setSafe({
       id: generateId(),
-      name: 'First Round Capital',
-      amount: 250000,
-      valuationCap: 4000000,
+      name: 'Angel Investor SAFE',
+      amount: 500000, // $500k
+      valuationCap: 5000000, // $5M cap
     });
+    
+    // Note: ESOP pool would be 10% (1,000,000 shares) but not allocated to any specific person
+    // This would be part of the total shares calculation in the ownership model
   };
 
   return (
