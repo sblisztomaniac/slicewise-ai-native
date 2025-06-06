@@ -85,3 +85,83 @@ Create a step-by-step flow:
 * [ ] Clear navigation between steps
 * [ ] Summary view before confirmation
 * [ ] Claude explanation included after
+
+# 🧾 Epic: Funding Round UX Improvements
+
+These issues aim to improve the user experience around adding and understanding funding rounds in SliceWise.
+
+---
+
+### ✅ Issue 1: Explain Suggested Round Inputs
+
+**Problem:** Users don’t know what valuation or amount to input.
+
+**Solution:** Add an info section or toggle below the round form.
+
+**Explanation Should Include:**
+
+* Typical seed round ranges (\$500k–\$2M)
+* Valuation suggestions based on prior SAFE caps
+* Example output like:
+
+  > "At a \$6M pre and \$1M raised, you'd issue \~1.83M shares and dilute founders by 6%."
+
+**Framework Alignment:**
+
+* \#1 (Simplify)
+* \#3 (Faster Aha Moment)
+* \#5 (Outcome clarity)
+* \#12 (UX focus)
+
+---
+
+### ✅ Issue 2: Save + Display Round Details Clearly
+
+**Problem:** Claude’s answer disappears, and round data isn’t persistent.
+
+**Solution:**
+
+* Update the `funding_rounds` array in context or Supabase.
+* Keep previous rounds in memory or DB.
+* Add a visual recap list below the form (e.g., Round name, valuation, ownership %).
+
+**Framework Alignment:**
+
+* \#4 (Convince in onboarding)
+* \#5 (Show outcomes)
+* \#7 (User feels smarter)
+
+---
+
+### ✅ Issue 3: Improve AI Output Formatting
+
+**Problem:** Explanation is crammed and not skimmable.
+
+**Solution:**
+
+* Break into bullet points with line breaks
+* Use bolding for names and percentages
+* Add emoji if in 12yo mode (🎯 📊 🔍)
+
+**Framework Alignment:**
+
+* \#3 (Faster Aha)
+* \#8 (Remove UI friction)
+* \#9 (Memorability)
+
+---
+### feature/mvp-sprint2
+
+### ✅ Issue 4: Refresh Pie Chart Dynamically
+
+**Problem:** Pie chart doesn’t reflect new round immediately.
+
+**Solution:**
+
+* Ensure chart rerenders after round submission
+* Pull from latest `ownershipData`
+
+**Framework Alignment:**
+
+* \#5 (Show outcome)
+* \#13 (Test with real users)
