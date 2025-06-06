@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #1E40AF;
+  --primary-light: #DBEAFE;
+  --secondary: #0D9488;
+  --accent: #F97316;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #1F2937;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  @apply font-bold;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.prose h2 {
+  @apply text-xl font-bold text-blue-800 mb-3;
+}
+
+.prose p {
+  @apply mb-3 text-gray-700;
+}
+
+/* Animation for chart transitions */
+.recharts-pie-sector {
+  transition: all 0.3s ease;
+}

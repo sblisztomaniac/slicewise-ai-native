@@ -1,0 +1,30 @@
+# 🟦 Node
+node_modules/
+dist/
+build/
+
+# 🧪 Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 🔐 API Keys
+.env
+
+# ⚙️ OS Files
+.DS_Store
+Thumbs.db
+
+# ⚛️ Vite
+.vite/
+
+# ⚙️ Bolt/Claude
+.bolt/
+.cache/
+
+# ⛓️ Git backup
+*.swp
+*.swo
+*.bak
+*.tmp
