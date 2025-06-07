@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect, FC, useCallback } from 'react';
 import { useCapTable } from '../context/CapTableContext';
 import { motion } from 'framer-motion';
-import { HelpCircle, X } from 'lucide-react';
+import { HelpCircle, X, Info, Save, Clock, Trash2 } from 'lucide-react';
 import { FundingRound, RoundType } from '../types';
+import HelpMeDecideButton from './HelpMeDecideButton';
+import { FormattedExplanation } from './FormattedExplanation';
+
+const LOCAL_STORAGE_KEY = 'savedFundingRounds';
 
 // Round type definitions with typical valuation ranges (in millions)
 const ROUND_TYPE_RANGES = {
@@ -44,6 +48,61 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
   const [explanationStyle, setExplanationStyle] = useState<ExplanationStyle>('mentor');
   const [activeHelp, setActiveHelp] = useState<string | null>(null);
   const helpRef = useRef<HTMLDivElement>(null);
+  const [savedRounds, setSavedRounds] = useState<FundingRound[]>([]);
+  const [selectedRound, setSelectedRound] = useState<FundingRound | null>(null);
+
+  // Load saved rounds on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (saved) {
+      try {
+        setSavedRounds(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse saved rounds', e);
+      }
+    }
+  }, []);
+
+  // Save rounds to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(savedRounds));
+  }, [savedRounds]);
+
+  const handleSaveRound = () => {
+    if (!validateForm()) return;
+    
+    const newRound: FundingRound = {
+      id: generateId(),
+      name: formData.name,
+      type: formData.type,
+      amount: formData.amount,
+      valuation: formData.valuation,
+      date: formData.date,
+      shares: Math.round((formData.amount / formData.valuation) * (totalShares || 10000000)),
+      ownershipPercentage: (formData.amount / formData.valuation) * 100
+    };
+
+    setSavedRounds(prev => [newRound, ...prev].slice(0, 5));
+    setSelectedRound(newRound);
+  };
+
+  const handleLoadRound = (round: FundingRound) => {
+    setFormData({
+      name: round.name,
+      type: round.type,
+      amount: round.amount,
+      valuation: round.valuation,
+      date: round.date
+    });
+    setSelectedRound(round);
+  };
+
+  const handleClearRounds = () => {
+    if (window.confirm('Are you sure you want to clear all saved rounds?')) {
+      setSavedRounds([]);
+      setSelectedRound(null);
+    }
+  };
   
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -95,9 +154,10 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
     setActiveHelp(activeHelp === field ? null : field);
   };
 
-  const HelpTooltip = ({ field, content }: { field: string; content: React.ReactNode }) => (
-    <div className="relative inline-block ml-2">
-      <button 
+  const HelpTooltip: FC<{ field: string; content: React.ReactNode; className?: string }> = ({ field, content, className = '' }) => (
+    <div className={`relative ml-2 ${className}`}>
+      <button
+        type="button"
         onClick={(e) => handleHelpClick(field, e)}
         className="text-gray-400 hover:text-blue-500 focus:outline-none"
         aria-label={`Help for ${field}`}
@@ -107,10 +167,15 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
       {activeHelp === field && (
         <div 
           ref={helpRef}
-          className="absolute z-10 w-64 p-3 mt-1 text-sm text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg"
+          className="absolute z-10 w-72 p-4 text-sm text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg"
           style={{ left: '50%', transform: 'translateX(-50%)' }}
         >
-          {content}
+          <div className="flex items-start">
+            <Info className="flex-shrink-0 mt-0.5 mr-2 text-blue-500" size={16} />
+            <div>
+              {content}
+            </div>
+          </div>
           <button 
             onClick={(e) => {
               e.stopPropagation();
@@ -125,11 +190,44 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
       )}
     </div>
   );
+  
+  const handleHelpMeDecide = (values: { amount: number; valuation: number }) => {
+    setFormData(prev => ({
+      ...prev,
+      amount: values.amount,
+      valuation: values.valuation
+    }));
+  };
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Please enter a round name';
+    }
+    
+    if (formData.amount <= 0) {
+      newErrors.amount = 'Please enter a valid amount';
+    } else if (formData.amount > formData.valuation * 0.5) {
+      newErrors.amount = 'Investment amount should typically be less than 50% of the valuation';
+    }
+    
+    if (formData.valuation <= 0) {
+      newErrors.valuation = 'Please enter a valid valuation';
+    } else if (formData.valuation < 1000) {
+      newErrors.valuation = 'Valuation seems too low';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || formData.amount <= 0 || formData.valuation <= 0) {
-      alert('Please fill in all required fields');
+    
+    if (!validateForm()) {
       return;
     }
 
@@ -171,7 +269,15 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
     try {
       setIsExplanationLoading(true);
       const newExplanation = await explainRoundImpact(currentRound, style);
-      setExplanation(newExplanation);
+      const formattedExplanation = `## Impact of $${currentRound.amount.toLocaleString()} at $${currentRound.valuation.toLocaleString()} Valuation
+
+${newExplanation}
+
+### Key Takeaways:
+- **Equity Dilution**: ${((currentRound.amount / currentRound.valuation) * 100).toFixed(1)}% of the company
+- **Post-Money Valuation**: $${(currentRound.amount + currentRound.valuation).toLocaleString()}
+- **Price Per Share**: $${(currentRound.valuation / (totalShares || 10000000)).toFixed(4)}`;
+      setExplanation(formattedExplanation);
     } catch (error) {
       console.error('Error updating explanation:', error);
     } finally {
@@ -179,11 +285,55 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  // Generate explanation for the funding round impact with markdown formatting
+  const generateExplanation = useCallback(async () => {
+    if (!formData.amount || !formData.valuation) return;
+    
+    const round: FundingRound = {
+      id: generateId(),
+      name: formData.name,
+      type: formData.type,
+      amount: formData.amount,
+      valuation: formData.valuation,
+      date: formData.date,
+      shares: 0,
+      ownershipPercentage: 0
+    };
+    
+    setIsExplanationLoading(true);
+    
+    try {
+      const explanation = await explainRoundImpact(round);
+      
+      // Format the explanation with markdown
+      const formattedExplanation = `## Impact of $${formData.amount.toLocaleString()} at $${formData.valuation.toLocaleString()} Valuation
+
+${explanation}
+
+### Key Takeaways:
+- **Equity Dilution**: ${((formData.amount / formData.valuation) * 100).toFixed(1)}% of the company
+- **Post-Money Valuation**: $${(formData.amount + formData.valuation).toLocaleString()}
+- **Price Per Share**: $${(formData.valuation / (totalShares || 10000000)).toFixed(4)}`;
+      
+      setExplanation(formattedExplanation);
+    } catch (error) {
+      console.error('Error generating explanation:', error);
+      setExplanation('## Error  \n\nFailed to generate explanation. Please try again.');
+    } finally {
+      setIsExplanationLoading(false);
+    }
+  }, [formData, explainRoundImpact, totalShares, generateId]);
+
+  // Call generateExplanation when form data changes
+  useEffect(() => {
+    generateExplanation();
+  }, [formData.amount, formData.valuation, formData.type, generateExplanation]);
+
   if (!isOpen) return null;
 
   const suggestedAmount = getSuggestedAmount(formData.valuation);
-  const postMoneyValuation = formData.valuation + formData.amount;
 
+// ...
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
@@ -207,13 +357,68 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
+          {/* Saved Rounds Section */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700">Saved Rounds</h3>
+              <div className="flex space-x-2">
+                <button
+                  type="button"
+                  onClick={handleSaveRound}
+                  disabled={!formData.name || !formData.amount || !formData.valuation}
+                  className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Save className="w-3 h-3 mr-1" /> Save Current
+                </button>
+                {savedRounds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearRounds}
+                    className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" /> Clear All
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {savedRounds.length === 0 ? (
+              <p className="text-sm text-gray-500">No saved rounds yet. Fill out the form and click "Save Current".</p>
+            ) : (
+              <div className="space-y-2">
+                {savedRounds.map((round) => (
+                  <div
+                    key={round.id}
+                    className={`flex items-center justify-between p-2 text-sm rounded-md cursor-pointer ${
+                      selectedRound?.id === round.id
+                        ? 'bg-blue-50 border border-blue-200'
+                        : 'hover:bg-gray-50 border border-transparent'
+                    }`}
+                    onClick={() => handleLoadRound(round)}
+                  >
+                    <div>
+                      <div className="font-medium text-gray-900">{round.name}</div>
+                      <div className="text-xs text-gray-500">
+                        ${round.amount.toLocaleString()} at ${round.valuation.toLocaleString()} pre
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-400 flex items-center">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {new Date(round.date).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                 Round Name <span className="text-red-500">*</span>
               </label>
-              <div className="flex mt-1">
+              <div className="relative mt-1">
                 <input
                   type="text"
                   id="name"
@@ -225,7 +430,12 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
                 />
                 <HelpTooltip
                   field="name"
-                  content="A descriptive name for this funding round (e.g., 'Seed Round', 'Series A')"
+                  content={
+                    <div className="space-y-2">
+                      <p className="font-medium">Round Name</p>
+                      <p>A descriptive name for this funding round (e.g., 'Seed Round', 'Series A')</p>
+                    </div>
+                  }
                 />
               </div>
             </div>
@@ -234,7 +444,7 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
               <label htmlFor="type" className="block text-sm font-medium text-gray-700">
                 Round Type <span className="text-red-500">*</span>
               </label>
-              <div className="flex mt-1">
+              <div className="relative mt-1">
                 <select
                   id="type"
                   name="type"
@@ -269,48 +479,116 @@ const AddFundingRound: FC<AddFundingRoundProps> = ({ isOpen, onClose }) => {
               <label htmlFor="valuation" className="block text-sm font-medium text-gray-700">
                 Pre-Money Valuation ($) <span className="text-red-500">*</span>
               </label>
-              <div className="flex mt-1">
-                <input
-                  type="number"
-                  id="valuation"
-                  name="valuation"
-                  value={formData.valuation || ''}
-                  onChange={handleChange}
-                  min="0"
-                  step="1000"
-                  className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  required
-                />
-                <HelpTooltip
-                  field="valuation"
-                  content="The company's valuation before this investment"
-                />
+              <div className="relative mt-1">
+                <div className="flex">
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <span className="text-gray-500 sm:text-sm">$</span>
+                    </div>
+                    <input
+                      type="number"
+                      id="valuation"
+                      name="valuation"
+                      value={formData.valuation || ''}
+                      onChange={handleChange}
+                      min="0"
+                      step="1000"
+                      className={`block w-full pl-7 pr-10 border ${
+                        errors.valuation ? 'border-red-300' : 'border-gray-300'
+                      } rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+                      required
+                      aria-invalid={!!errors.valuation}
+                      aria-describedby={errors.valuation ? 'valuation-error' : undefined}
+                    />
+                    <HelpTooltip
+                      field="valuation"
+                      className="absolute right-10 top-1/2 transform -translate-y-1/2"
+                      content={
+                        <div className="space-y-2">
+                          <p className="font-medium">Pre-Money Valuation</p>
+                          <p>The company's valuation before this investment. This is what your company is worth before the new money comes in.</p>
+                          <p className="text-xs text-gray-500 mt-2">
+                            <strong>Typical ranges:</strong><br />
+                            • Pre-seed: $1M - $5M<br />
+                            • Seed: $5M - $15M<br />
+                            • Series A: $15M - $50M
+                          </p>
+                        </div>
+                      }
+                    />
+                  </div>
+                </div>
+                {errors.valuation && (
+                  <p className="mt-1 text-sm text-red-600" id="valuation-error">
+                    {errors.valuation}
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  Post-money: <span className="font-medium">${(formData.valuation + formData.amount).toLocaleString()}</span>
+                </p>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
-                Post-money: ${postMoneyValuation.toLocaleString()}
-              </p>
             </div>
 
             <div>
               <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
                 Amount Raised ($) <span className="text-red-500">*</span>
               </label>
-              <div className="flex mt-1">
-                <input
-                  type="number"
-                  id="amount"
-                  name="amount"
-                  value={formData.amount || ''}
-                  onChange={handleChange}
-                  min="0"
-                  step="1000"
-                  className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  required
-                />
-                <HelpTooltip
-                  field="amount"
-                  content="The total amount of money being raised in this round"
-                />
+              <div className="relative mt-1">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <span className="text-gray-500 sm:text-sm">$</span>
+                    </div>
+                    <input
+                      type="number"
+                      id="amount"
+                      name="amount"
+                      value={formData.amount || ''}
+                      onChange={handleChange}
+                      min="0"
+                      step="1000"
+                      className={`block w-full pl-7 pr-10 border ${
+                        errors.amount ? 'border-red-300' : 'border-gray-300'
+                      } rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+                      required
+                      aria-invalid={!!errors.amount}
+                      aria-describedby={errors.amount ? 'amount-error' : undefined}
+                    />
+                    <HelpTooltip
+                      field="amount"
+                      className="absolute right-10 top-1/2 transform -translate-y-1/2"
+                      content={
+                        <div className="space-y-2">
+                          <p className="font-medium">Investment Amount</p>
+                          <p>How much money you're raising in this round. This will determine what percentage of the company you're selling.</p>
+                          <p className="text-xs text-gray-500 mt-2">
+                            <strong>Typical ranges:</strong><br />
+                            • Pre-seed: $100K - $2M<br />
+                            • Seed: $500K - $5M<br />
+                            • Series A: $2M - $20M
+                          </p>
+                        </div>
+                      }
+                    />
+                  </div>
+                  <HelpMeDecideButton 
+                    onSelect={handleHelpMeDecide} 
+                    roundType={formData.type}
+                    className="whitespace-nowrap"
+                  />
+                </div>
+                {errors.amount && (
+                  <p className="mt-1 text-sm text-red-600" id="amount-error">
+                    {errors.amount}
+                  </p>
+                )}
+                {formData.valuation > 0 && formData.amount > 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Equity: <span className="font-medium">
+                      {((formData.amount / (formData.valuation + formData.amount)) * 100).toFixed(1)}%
+                    </span>
+                  </p>
+                )}
               </div>
               {suggestedAmount > 0 && (
                 <p className="mt-1 text-xs text-gray-500">

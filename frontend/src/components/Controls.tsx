@@ -1,13 +1,93 @@
 import React, { useState } from 'react';
 import { useCapTable } from '../context/CapTableContext';
-import { RefreshCw, FileText, PlusCircle } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { RefreshCw, FileText, PlusCircle, MoreHorizontal } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import AddFundingRound from './AddFundingRound.tsx';
 
-const Controls: React.FC = () => {
+interface ControlsProps {
+  variant?: 'default' | 'compact';
+}
+
+const Controls: React.FC<ControlsProps> = ({ variant = 'default' }) => {
   const { clearTable, loadSampleData } = useCapTable();
   const [isAddRoundOpen, setIsAddRoundOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  if (variant === 'compact') {
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          className="flex items-center justify-center p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+          aria-label="More options"
+        >
+          <MoreHorizontal className="w-5 h-5" />
+        </button>
+
+        <AnimatePresence>
+          {isMenuOpen && (
+            <>
+              {/* Backdrop */}
+              <div 
+                className="fixed inset-0 z-10" 
+                onClick={() => setIsMenuOpen(false)}
+              />
+              
+              {/* Menu */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-20"
+              >
+                <button
+                  onClick={() => {
+                    loadSampleData();
+                    setIsMenuOpen(false);
+                  }}
+                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <FileText size={16} className="mr-2" />
+                  Load Sample Data
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setIsAddRoundOpen(true);
+                    setIsMenuOpen(false);
+                  }}
+                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <PlusCircle size={16} className="mr-2" />
+                  Add Funding Round
+                </button>
+                
+                <hr className="my-1 border-gray-200" />
+                
+                <button
+                  onClick={() => {
+                    clearTable();
+                    setIsMenuOpen(false);
+                  }}
+                  className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <RefreshCw size={16} className="mr-2" />
+                  Clear Table
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        <AddFundingRound 
+          isOpen={isAddRoundOpen} 
+          onClose={() => setIsAddRoundOpen(false)} 
+        />
+      </div>
+    );
+  }
+
+  // Default variant (original layout)
   return (
     <div className="space-y-6">
       <motion.div 

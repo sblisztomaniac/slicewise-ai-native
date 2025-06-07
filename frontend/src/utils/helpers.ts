@@ -1,5 +1,92 @@
 import { Founder, Safe, OwnershipData, FundingRound } from '../types';
 
+type ValidationOptions = {
+  required?: boolean;
+  min?: number;
+  max?: number;
+  isInteger?: boolean;
+};
+
+type ValidationResult = {
+  isValid: boolean;
+  error?: string;
+};
+
+export const validateNumberInput = (
+  value: string,
+  options: ValidationOptions = {}
+): ValidationResult => {
+  const { required = true, min, max, isInteger = false } = options;
+  
+  // Check if value is empty
+  if (!value.trim()) {
+    return {
+      isValid: !required,
+      error: required ? 'This field is required' : undefined
+    };
+  }
+  
+  // Remove commas and check if it's a valid number
+  const numericValue = value.replace(/,/g, '');
+  const num = Number(numericValue);
+  
+  if (isNaN(num)) {
+    return { 
+      isValid: false, 
+      error: 'Please enter a valid number' 
+    };
+  }
+  
+  // Check if it should be an integer
+  if (isInteger && !Number.isInteger(num)) {
+    return { 
+      isValid: false, 
+      error: 'Must be a whole number' 
+    };
+  }
+  
+  // Check minimum value
+  if (min !== undefined && num < min) {
+    return { 
+      isValid: false, 
+      error: `Must be at least ${min.toLocaleString()}` 
+    };
+  }
+  
+  // Check maximum value
+  if (max !== undefined && num > max) {
+    return { 
+      isValid: false, 
+      error: `Must be less than ${max.toLocaleString()}` 
+    };
+  }
+  
+  return { isValid: true };
+};
+
+/**
+ * Format a numeric string with commas and optional decimal places
+ */
+export const formatNumberInput = (value: string): string => {
+  // Remove all non-digit characters except decimal point
+  const numericValue = value.replace(/[^0-9.]/g, '');
+  
+  // If empty, return empty string
+  if (!numericValue) return '';
+  
+  // If it's a decimal number, format the integer part
+  if (numericValue.includes('.')) {
+    const [integerPart, decimalPart] = numericValue.split('.');
+    const formattedInteger = integerPart ? 
+      parseInt(integerPart, 10).toLocaleString() : 
+      '0';
+    return `${formattedInteger}.${decimalPart || ''}`;
+  }
+  
+  // For integers
+  return parseInt(numericValue, 10).toLocaleString();
+};
+
 export const generateId = (): string => {
   return Math.random().toString(36).substring(2, 9);
 };

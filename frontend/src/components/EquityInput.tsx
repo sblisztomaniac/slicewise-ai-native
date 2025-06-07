@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCapTable } from '../context/CapTableContext';
 import { generateId } from '../utils/helpers';
 import { PlusCircle, Trash2, HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { formatCurrency } from '../utils/helpers';
+import { formatCurrency, validateNumberInput, formatNumberInput } from '../utils/helpers';
 
 const EquityInput: React.FC = () => {
   const {
@@ -21,42 +21,219 @@ const EquityInput: React.FC = () => {
     amount: '',
     valuationCap: '',
   });
+  const [errors, setErrors] = useState<{
+    founderShares?: string;
+    safeAmount?: string;
+    safeValuation?: string;
+    [key: string]: string | undefined;
+  }>({});
 
-  const handleAddFounder = () => {
-    if (newFounder.name && newFounder.shares) {
-      addFounder(newFounder.name, Number(newFounder.shares));
-      setNewFounder({ name: '', shares: '' });
+  // Add state to track if we should keep form data
+  const [keepFormOpen, setKeepFormOpen] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  
+  // Validate founder shares input
+  const validateFounderShares = (value: string): boolean => {
+    const { isValid, error } = validateNumberInput(value, {
+      required: true,
+      min: 1,
+      isInteger: true,
+      max: 1000000000 // 1 billion max shares
+    });
+    
+    setErrors(prev => ({
+      ...prev,
+      founderShares: isValid ? undefined : error
+    }));
+    
+    return isValid;
+  };
+  
+  // Validate SAFE amount input
+  const validateSafeAmount = (value: string): boolean => {
+    const { isValid, error } = validateNumberInput(value, {
+      required: true,
+      min: 1,
+      max: 1000000000000 // 1 trillion max
+    });
+    
+    setErrors(prev => ({
+      ...prev,
+      safeAmount: isValid ? undefined : error
+    }));
+    
+    return isValid;
+  };
+  
+  // Validate SAFE valuation cap input
+  const validateSafeValuation = (value: string): boolean => {
+    const { isValid, error } = validateNumberInput(value, {
+      required: true,
+      min: 1000, // At least $1,000
+      max: 1000000000000 // 1 trillion max
+    });
+    
+    setErrors(prev => ({
+      ...prev,
+      safeValuation: isValid ? undefined : error
+    }));
+    
+    return isValid;
+  };
+  
+  // Format number input with commas
+  const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>, type: 'shares' | 'amount' | 'valuationCap') => {
+    const { value } = e.target;
+    const formattedValue = formatNumberInput(value);
+    
+    if (type === 'shares') {
+      setNewFounder(prev => ({ ...prev, shares: formattedValue }));
+      validateFounderShares(formattedValue);
+    } else if (type === 'amount') {
+      setNewSafe(prev => ({ ...prev, amount: formattedValue }));
+      validateSafeAmount(formattedValue);
+    } else if (type === 'valuationCap') {
+      setNewSafe(prev => ({ ...prev, valuationCap: formattedValue }));
+      validateSafeValuation(formattedValue);
     }
   };
 
-  const handleUpdateFounder = (id: string, field: 'name' | 'shares', value: string) => {
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleAddFounder = useCallback(() => {
+    const isSharesValid = validateFounderShares(newFounder.shares);
+    
+    if (!newFounder.name.trim()) {
+      setErrors(prev => ({
+        ...prev,
+        founderName: 'Founder name is required'
+      }));
+      return;
+    }
+    
+    if (!isSharesValid) return;
+    
+    try {
+      addFounder(newFounder.name, Number(newFounder.shares.replace(/,/g, '')));
+      
+      // Only clear form if not keeping it open
+      if (!keepFormOpen) {
+        setNewFounder({ name: '', shares: '' });
+      } else {
+        // Keep name, clear shares for next entry
+        setNewFounder(prev => ({ ...prev, shares: '' }));
+      }
+      
+      // Clear any previous errors
+      setErrors(prev => ({
+        ...prev,
+        founderName: undefined,
+        founderShares: undefined
+      }));
+    } catch (error) {
+      console.error('Error adding founder:', error);
+      setErrors(prev => ({
+        ...prev,
+        general: 'Failed to add founder. Please try again.'
+      }));
+    }
+  }, [newFounder, addFounder, keepFormOpen]);
+
+  const handleUpdateFounder = useCallback((id: string, field: 'name' | 'shares', value: string) => {
     const founderToUpdate = founders.find((f) => f.id === id);
-    if (founderToUpdate) {
-      updateFounder(
-        id,
-        field === 'name' ? value : founderToUpdate.name,
-        field === 'shares' ? Number(value) : founderToUpdate.shares
-      );
+    if (!founderToUpdate) return;
+    
+    try {
+      if (field === 'shares') {
+        const { isValid } = validateNumberInput(value, {
+          required: true,
+          min: 1,
+          isInteger: true,
+          max: 1000000000
+        });
+        
+        if (!isValid) return;
+        
+        // Format the number before updating
+        const formattedValue = formatNumberInput(value);
+        updateFounder(id, {
+          ...founderToUpdate,
+          shares: Number(formattedValue.replace(/,/g, ''))
+        });
+      } else {
+        // For name field
+        if (!value.trim()) {
+          setErrors(prev => ({
+            ...prev,
+            [`founderName_${id}`]: 'Name cannot be empty'
+          }));
+          return;
+        }
+        updateFounder(id, {
+          ...founderToUpdate,
+          name: value
+        });
+      }
+    } catch (error) {
+      console.error('Error updating founder:', error);
+      setErrors(prev => ({
+        ...prev,
+        general: 'Failed to update founder. Please try again.'
+      }));
     }
-  };
+  }, [founders, updateFounder]);
 
-  const handleAddOrUpdateSafe = () => {
-    if (newSafe.name && newSafe.amount && newSafe.valuationCap) {
+  const handleAddOrUpdateSafe = useCallback(() => {
+    const isAmountValid = validateSafeAmount(newSafe.amount);
+    const isValuationValid = validateSafeValuation(newSafe.valuationCap);
+    
+    if (!newSafe.name.trim()) {
+      setErrors(prev => ({
+        ...prev,
+        safeName: 'SAFE name is required'
+      }));
+      return;
+    }
+    
+    if (!isAmountValid || !isValuationValid) return;
+    
+    try {
       setSafe({
         id: safe?.id || generateId(),
         name: newSafe.name,
-        amount: Number(newSafe.amount),
-        valuationCap: Number(newSafe.valuationCap)
+        amount: Number(newSafe.amount.replace(/,/g, '')),
+        valuationCap: Number(newSafe.valuationCap.replace(/,/g, ''))
       });
+      
       setNewSafe({ name: '', amount: '', valuationCap: '' });
+      
+      // Clear any previous errors
+      setErrors(prev => ({
+        ...prev,
+        safeName: undefined,
+        safeAmount: undefined,
+        safeValuation: undefined
+      }));
+    } catch (error) {
+      console.error('Error adding SAFE:', error);
+      setErrors(prev => ({
+        ...prev,
+        general: 'Failed to add SAFE. Please try again.'
+      }));
     }
-  };
+  }, [newSafe, safe?.id, setSafe]);
+
+  // Handle Enter key to add founder
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && newFounder.name && newFounder.shares) {
+      e.preventDefault();
+      handleAddFounder();
+    }
+  }, [newFounder, handleAddFounder]);
 
   const TooltipIcon: React.FC<{ text: string }> = ({ text }) => {
     const [isHovered, setIsHovered] = useState(false);
     const tooltipRef = useRef<HTMLDivElement>(null);
 
-    // Handle click outside to close tooltip
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
         if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
@@ -103,20 +280,28 @@ const EquityInput: React.FC = () => {
   };
 
   return (
-    <motion.div 
+    <div 
       id="equity-input" 
       className="bg-white rounded-lg shadow-md p-6 mb-8"
-      initial={{ y: 20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.5 }}
     >
       <h2 className="text-2xl font-bold text-blue-900 mb-6">Equity Input</h2>
       
       {/* Founders Section */}
       <div className="mb-8">
-        <h3 className="text-xl font-semibold text-blue-800 mb-3 flex items-center">
-          Founders
-        </h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-xl font-semibold text-blue-800 flex items-center">
+            Founders
+          </h3>
+          <label className="flex items-center text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={keepFormOpen}
+              onChange={(e) => setKeepFormOpen(e.target.checked)}
+              className="mr-2"
+            />
+            Keep form open for multiple entries
+          </label>
+        </div>
         
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 mb-4">
@@ -132,45 +317,51 @@ const EquityInput: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {founders.map((founder) => (
-                <motion.tr 
-                  key={founder.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.3 }}
-                >
+                <tr key={founder.id}>
                   <td className="px-4 py-3 text-sm text-gray-900">
-                    <input
-                      type="text"
-                      value={founder.name}
-                      onChange={(e) =>
-                        handleUpdateFounder(founder.id, 'name', e.target.value)
-                      }
-                      className="w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={founder.shares.toLocaleString()}
+                        onChange={(e) => handleUpdateFounder(founder.id, 'shares', e.target.value)}
+                        onFocus={() => setFocusedField(`${founder.id}-shares`)}
+                        onBlur={() => setFocusedField(null)}
+                        className={`w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500 ${
+                          errors[`founderShares_${founder.id}`] ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors[`founderShares_${founder.id}`] && (
+                        <div className="absolute -bottom-5 left-0 text-xs text-red-500">
+                          {errors[`founderShares_${founder.id}`]}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     <input
                       type="number"
                       min="0"
-                      value={founder.shares}
+                      value={founder.name}
                       onChange={(e) =>
-                        handleUpdateFounder(founder.id, 'shares', e.target.value)
+                        handleUpdateFounder(founder.id, 'name', e.target.value)
                       }
+                      onFocus={() => setFocusedField(`${founder.id}-name`)}
+                      onBlur={() => setFocusedField(null)}
                       className="w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </td>
                   <td className="px-4 py-3 text-sm text-right">
                     <button
                       onClick={() => removeFounder(founder.id)}
-                      className="text-red-600 hover:text-red-800 transition-colors"
+                      className="text-red-600 hover:text-red-800 transition-colors p-1 rounded hover:bg-red-50"
                     >
                       <Trash2 size={18} />
                     </button>
                   </td>
-                </motion.tr>
+                </tr>
               ))}
-              <tr>
+              <tr className="bg-blue-50">
                 <td className="px-4 py-3 text-sm text-gray-900">
                   <input
                     type="text"
@@ -179,20 +370,33 @@ const EquityInput: React.FC = () => {
                     onChange={(e) =>
                       setNewFounder({ ...newFounder, name: e.target.value })
                     }
+                    onKeyPress={handleKeyPress}
+                    onFocus={() => setFocusedField('new-name')}
+                    onBlur={() => setFocusedField(null)}
                     className="w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-900">
-                  <input
-                    type="number"
-                    placeholder="Number of shares"
-                    min="0"
-                    value={newFounder.shares}
-                    onChange={(e) =>
-                      setNewFounder({ ...newFounder, shares: e.target.value })
-                    }
-                    className="w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={newFounder.shares}
+                      onChange={(e) => handleNumberInput(e, 'shares')}
+                      onKeyPress={handleKeyPress}
+                      onFocus={() => setFocusedField('new-shares')}
+                      onBlur={() => setFocusedField(null)}
+                      className={`w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.founderShares ? 'border-red-500' : ''
+                      }`}
+                      placeholder="1,000,000"
+                    />
+                    {errors.founderShares && (
+                      <div className="absolute -bottom-5 left-0 text-xs text-red-500">
+                        {errors.founderShares}
+                      </div>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-right">
                   <button
@@ -201,7 +405,7 @@ const EquityInput: React.FC = () => {
                     className={`flex items-center justify-center rounded-full p-1 transition-colors ${
                       !newFounder.name || !newFounder.shares
                         ? 'text-gray-400'
-                        : 'text-blue-600 hover:text-blue-800'
+                        : 'text-blue-600 hover:text-blue-800 hover:bg-blue-100'
                     }`}
                   >
                     <PlusCircle size={18} />
@@ -212,18 +416,26 @@ const EquityInput: React.FC = () => {
           </table>
         </div>
         
-        <button
-          onClick={handleAddFounder}
-          disabled={!newFounder.name || !newFounder.shares}
-          className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-            !newFounder.name || !newFounder.shares
-              ? 'bg-gray-200 text-gray-400'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-        >
-          <PlusCircle size={18} className="mr-2" />
-          Add Founder
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleAddFounder}
+            disabled={!newFounder.name || !newFounder.shares}
+            className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+              !newFounder.name || !newFounder.shares
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            <PlusCircle size={18} className="mr-2" />
+            Add Founder
+          </button>
+          
+          {founders.length > 0 && (
+            <div className="text-sm text-gray-600 flex items-center">
+              Total founders: {founders.length}
+            </div>
+          )}
+        </div>
       </div>
       
       {/* SAFE Investment Section */}
@@ -244,7 +456,7 @@ const EquityInput: React.FC = () => {
               </div>
               <button
                 onClick={() => setSafe(null)}
-                className="text-red-600 hover:text-red-800 transition-colors"
+                className="text-red-600 hover:text-red-800 transition-colors p-1 rounded hover:bg-red-50"
               >
                 <Trash2 size={18} />
               </button>
@@ -270,32 +482,56 @@ const EquityInput: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Investment Amount ($)
               </label>
-              <input
-                type="number"
-                placeholder="e.g., 250000"
-                min="0"
-                value={newSafe.amount}
-                onChange={(e) =>
-                  setNewSafe({ ...newSafe, amount: e.target.value })
-                }
-                className="w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500">$</span>
+                </div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={newSafe.amount}
+                  onChange={(e) => handleNumberInput(e, 'amount')}
+                  onFocus={() => setFocusedField('safe-amount')}
+                  onBlur={() => setFocusedField(null)}
+                  className={`w-full pl-6 border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.safeAmount ? 'border-red-500' : ''
+                  }`}
+                  placeholder="500,000"
+                />
+                {errors.safeAmount && (
+                  <div className="absolute -bottom-5 left-0 text-xs text-red-500">
+                    {errors.safeAmount}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Valuation Cap ($)
                 <TooltipIcon text="The valuation cap sets the maximum company valuation at which the SAFE investor's money converts to equity." />
               </label>
-              <input
-                type="number"
-                placeholder="e.g., 4000000"
-                min="0"
-                value={newSafe.valuationCap}
-                onChange={(e) =>
-                  setNewSafe({ ...newSafe, valuationCap: e.target.value })
-                }
-                className="w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500">$</span>
+                </div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={newSafe.valuationCap}
+                  onChange={(e) => handleNumberInput(e, 'valuationCap')}
+                  onFocus={() => setFocusedField('safe-valuation')}
+                  onBlur={() => setFocusedField(null)}
+                  className={`w-full pl-6 border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.safeValuation ? 'border-red-500' : ''
+                  }`}
+                  placeholder="5,000,000"
+                />
+                {errors.safeValuation && (
+                  <div className="absolute -bottom-5 left-0 text-xs text-red-500">
+                    {errors.safeValuation}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -306,7 +542,7 @@ const EquityInput: React.FC = () => {
             disabled={!newSafe.name || !newSafe.amount || !newSafe.valuationCap}
             className={`flex items-center px-4 py-2 rounded-md transition-colors ${
               !newSafe.name || !newSafe.amount || !newSafe.valuationCap
-                ? 'bg-gray-200 text-gray-400'
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 : 'bg-teal-600 text-white hover:bg-teal-700'
             }`}
           >
@@ -315,7 +551,7 @@ const EquityInput: React.FC = () => {
           </button>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 };
 
