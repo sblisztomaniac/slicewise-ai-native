@@ -165,3 +165,51 @@ These issues aim to improve the user experience around adding and understanding 
 
 * \#5 (Show outcome)
 * \#13 (Test with real users)
+
+---
+
+## New Issues
+
+### Issue 5: Enhance AddFundingRound Wizard
+
+**Problem:** The current funding round form could be more user-friendly with a guided, step-by-step approach.
+
+**Solution:**
+- Convert to a multi-step wizard
+- Add progress indicator
+- Include validation at each step
+- Add a summary preview before submission
+
+**Framework Alignment:**
+- \#1 (Simplify)
+- \#12 (UX focus)
+- \#14 (Test as standalone)
+
+### Issue 6: Mobile Responsiveness Audit
+
+**Problem:** Some UI elements may not be optimized for mobile devices.
+
+**Solution:**
+- Audit all components for mobile responsiveness
+- Fix any layout issues
+- Ensure touch targets are appropriately sized
+- Test on various device sizes
+
+**Framework Alignment:**
+- \#12 (UX focus)
+- \#13 (Test with real users)
+
+### Issue 7: Performance Testing
+
+**Problem:** Application performance with large cap tables needs verification.
+
+**Solution:**
+- Test with large datasets (50+ funding rounds)
+- Optimize rendering performance
+- Implement virtualization for large lists
+- Add loading states for expensive operations
+
+**Framework Alignment:**
+- \#5 (Show outcome)
+- \#12 (UX focus)
+- \#13 (Test with real users)

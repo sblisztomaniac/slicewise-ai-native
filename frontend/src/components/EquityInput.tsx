@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useCapTable } from '../context/CapTableContext';
+import { generateId } from '../utils/helpers';
 import { PlusCircle, Trash2, HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatCurrency } from '../utils/helpers';
@@ -11,9 +12,7 @@ const EquityInput: React.FC = () => {
     addFounder,
     updateFounder,
     removeFounder,
-    addSafe,
-    updateSafe,
-    removeSafe,
+    setSafe,
   } = useCapTable();
 
   const [newFounder, setNewFounder] = useState({ name: '', shares: '' });
@@ -43,28 +42,65 @@ const EquityInput: React.FC = () => {
 
   const handleAddOrUpdateSafe = () => {
     if (newSafe.name && newSafe.amount && newSafe.valuationCap) {
-      if (safe) {
-        updateSafe(
-          newSafe.name || safe.name,
-          Number(newSafe.amount) || safe.amount,
-          Number(newSafe.valuationCap) || safe.valuationCap
-        );
-      } else {
-        addSafe(
-          newSafe.name,
-          Number(newSafe.amount),
-          Number(newSafe.valuationCap)
-        );
-      }
+      setSafe({
+        id: safe?.id || generateId(),
+        name: newSafe.name,
+        amount: Number(newSafe.amount),
+        valuationCap: Number(newSafe.valuationCap)
+      });
       setNewSafe({ name: '', amount: '', valuationCap: '' });
     }
   };
 
-  const TooltipIcon: React.FC<{ text: string }> = ({ text }) => (
-    <span title={text} className="inline-flex items-center ml-1 text-blue-500 cursor-help">
-      <HelpCircle size={16} />
-    </span>
-  );
+  const TooltipIcon: React.FC<{ text: string }> = ({ text }) => {
+    const [isHovered, setIsHovered] = useState(false);
+    const tooltipRef = useRef<HTMLDivElement>(null);
+
+    // Handle click outside to close tooltip
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
+          setIsHovered(false);
+        }
+      };
+
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }, []);
+
+    return (
+      <div className="relative inline-block ml-1" ref={tooltipRef}>
+        <button
+          type="button"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onClick={() => setIsHovered(!isHovered)}
+          className="text-blue-500 hover:text-blue-700 focus:outline-none"
+          aria-label="More information"
+        >
+          <HelpCircle size={16} />
+        </button>
+        
+        {isHovered && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 5 }}
+            className="absolute left-0 bottom-full mb-2 w-64 p-3 bg-blue-600 text-white text-sm rounded-md shadow-lg z-[100]"
+            style={{
+              filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))',
+              transformOrigin: 'bottom center',
+            }}
+          >
+            {text}
+            <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-b-0 border-t-4 border-t-blue-600 border-l-transparent border-r-transparent"></div>
+          </motion.div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <motion.div 
@@ -194,7 +230,7 @@ const EquityInput: React.FC = () => {
       <div className="mb-4">
         <h3 className="text-xl font-semibold text-blue-800 mb-3 flex items-center">
           SAFE Investment
-          <TooltipIcon text="SAFE (Simple Agreement for Future Equity) is an agreement between an investor and a company that provides rights to the investor for future equity in the company." />
+          <TooltipIcon text="A SAFE (Simple Agreement for Future Equity) is like an IOU from your company to an investor. For example, with $500,000 at $5,000,000 cap: Investor gives you $500,000 now. They get equity in your next funding round. Their price per share is based on a $5M valuation cap or the next round's valuation (whichever is lower)." />
         </h3>
         
         {safe ? (
@@ -207,7 +243,7 @@ const EquityInput: React.FC = () => {
                 </p>
               </div>
               <button
-                onClick={removeSafe}
+                onClick={() => setSafe(null)}
                 className="text-red-600 hover:text-red-800 transition-colors"
               >
                 <Trash2 size={18} />

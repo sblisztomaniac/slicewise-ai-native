@@ -1,33 +1,70 @@
 {
-    "epics": [
+  "epics": [
     {
-    "epic": "Fast Onboarding & Cap Table Clarity",
-    "user_stories": [
-    {
-    "story": "As a new user, I want to load a sample cap table so I can quickly understand how SliceWise works.",
-    "tasks": [
-    "Add 'Load Sample Scenario' button",
-    "Load cap table with: 2 founders, 1 SAFE, 10% ESOP, 1 Seed round",
-    "Trigger Claude to explain cap table setup"
-    ]
+      "epic": "Fast Onboarding & Cap Table Clarity",
+      "user_stories": [
+        {
+          "story": "As a new user, I want to load a sample cap table so I can quickly understand how SliceWise works.",
+          "tasks": [
+            "Add 'Load Sample Scenario' button",
+            "Load cap table with: 2 founders, 1 SAFE, 10% ESOP, 1 Seed round",
+            "Trigger Claude to explain cap table setup"
+          ]
+        },
+        {
+          "story": "As a founder, I want Claude to explain what happened after I add a round, so I understand the dilution impact.",
+          "tasks": [
+            "Detect when a round is added",
+            "Send round and cap table data to Claude",
+            "Display summary in AI Copilot using plain language"
+          ]
+        },
+        {
+          "story": "As a user, I want to add a funding round using a guided step-by-step flow so it feels simple and less intimidating.",
+          "tasks": [
+            "Create wizard steps: round type → amount → valuation → preview → confirm",
+            "Integrate data entry into cap table state",
+            "Trigger Claude explanation after final step"
+          ]
+        }
+      ]
     },
     {
-    "story": "As a founder, I want Claude to explain what happened after I add a round, so I understand the dilution impact.",
-    "tasks": [
-    "Detect when a round is added",
-    "Send round and cap table data to Claude",
-    "Display summary in AI Copilot using plain language"
-    ]
-    },
-    {
-    "story": "As a user, I want to add a funding round using a guided step-by-step flow so it feels simple and less intimidating.",
-    "tasks": [
-    "Create wizard steps: round type → amount → valuation → preview → confirm",
-    "Integrate data entry into cap table state",
-    "Trigger Claude explanation after final step"
-    ]
+      "epic": "Funding Round UX Improvements",
+      "user_stories": [
+        {
+          "story": "As a first-time founder, I want to understand what numbers to enter in a funding round form so I can make realistic and educational entries.",
+          "tasks": [
+            "Embed tooltip or toggle-based explanation beside each input field (valuation, amount, etc.)",
+            "Include Claude's logic for calculating shares and ownership post-funding",
+            "Add a \"Help me decide\" button that pre-fills inputs and explains them"
+          ]
+        },
+        {
+          "story": "As a user, I want the AI-generated explanation to be presented clearly so I can easily digest its meaning.",
+          "tasks": [
+            "Add paragraph spacing and bold headers to AI output",
+            "Break long explanations into bullet points or sections",
+            "Ensure consistent formatting via markdown or JSX-safe HTML"
+          ]
+        },
+        {
+          "story": "As a user, I want the funding round inputs to be saved so I can review or clear them later.",
+          "tasks": [
+            "Update data model to persist round name, type, valuation, amount",
+            "Display last added round details in a summary card",
+            "Add clear/reset round data button to start fresh"
+          ]
+        },
+        {
+          "story": "As a user, I want the pie chart to update after each funding round so I can visually see the impact.",
+          "tasks": [
+            "Trigger chart refresh on funding round submit",
+            "Animate ownership changes for better clarity",
+            "Ensure updated cap table data is passed to chart component"
+          ]
+        }
+      ]
     }
-    ]
-    }
-    ]
-    }
+  ]
+}

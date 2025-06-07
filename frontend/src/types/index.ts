@@ -18,6 +18,28 @@ export interface OwnershipData {
   name: string;
   shares: number;
   ownership: number; // percentage of ownership
-  type: 'founder' | 'safe' | 'esop' | 'other';
+  type: 'founder' | 'safe' | 'esop' | 'investor' | 'other';
   color: string;
+}
+
+export type FundingRound = {
+  id: string;
+  name: string;
+  type: 'pre-seed' | 'seed' | 'series-a' | 'series-b' | 'series-c' | 'series-d' | 'series-e' | 'series-f' | 'series-g' | 'series-h' | 'other';
+  amount: number;
+  valuation: number;
+  date: string;
+  shares: number;
+  ownershipPercentage: number;
+};
+
+export type RoundType = FundingRound['type'];
+
+export interface CapTableSnapshot {
+  timestamp: string;
+  founders: Founder[];
+  safe: Safe | null;
+  fundingRounds: FundingRound[];
+  totalShares: number;
+  ownershipData: OwnershipData[];
 }

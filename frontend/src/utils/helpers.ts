@@ -1,4 +1,4 @@
-import { Founder, Safe, OwnershipData } from '../types';
+import { Founder, Safe, OwnershipData, FundingRound } from '../types';
 
 export const generateId = (): string => {
   return Math.random().toString(36).substring(2, 9);
@@ -24,6 +24,15 @@ export const formatPercent = (percent: number): string => {
   }).format(percent / 100);
 };
 
+export const formatDate = (dateString: string): string => {
+  const options: Intl.DateTimeFormatOptions = { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric' 
+  };
+  return new Date(dateString).toLocaleDateString('en-US', options);
+};
+
 export const calculateSafeShares = (safe: Safe, preMoneySafeShares: number): number => {
   if (!safe || !safe.amount || !safe.valuationCap || preMoneySafeShares === 0) {
     return 0;
@@ -39,6 +48,7 @@ export const calculateSafeShares = (safe: Safe, preMoneySafeShares: number): num
 export const calculateOwnership = (
   founders: Founder[],
   safe: Safe | null,
+  fundingRounds: FundingRound[],
   colors: string[]
 ): { ownershipData: OwnershipData[]; totalShares: number } => {
   // Calculate total founder shares
@@ -47,8 +57,11 @@ export const calculateOwnership = (
   // Calculate SAFE shares if applicable
   const safeShares = safe ? calculateSafeShares(safe, totalFounderShares) : 0;
   
-  // Calculate total shares including SAFE (pre-ESOP)
-  const preEsopShares = totalFounderShares + safeShares;
+  // Calculate total shares from funding rounds
+  const totalRoundShares = fundingRounds.reduce((total, round) => total + round.shares, 0);
+  
+  // Calculate total shares including SAFE and funding rounds (pre-ESOP)
+  const preEsopShares = totalFounderShares + safeShares + totalRoundShares;
   
   // Calculate ESOP pool (10% of post-ESOP total, which is 11.11% of pre-ESOP total)
   const esopPool = Math.round((preEsopShares / 9) * 1); // 10% of post-ESOP = 11.11% of pre-ESOP
@@ -84,6 +97,19 @@ export const calculateOwnership = (
       color: '#6B7280', // Gray color for SAFE
     });
   }
+  
+  // Add funding rounds to ownership data
+  fundingRounds.forEach((round, index) => {
+    const roundOwnership = (round.shares / totalShares) * 100;
+    ownershipData.push({
+      id: round.id,
+      name: `${round.name} (${round.type})`,
+      shares: round.shares,
+      ownership: roundOwnership,
+      type: 'investor',
+      color: `hsl(${(index * 137.508) % 360}, 70%, 60%)`, // Generate distinct colors
+    });
+  });
   
   // Add ESOP pool to ownership data
   if (esopPool > 0) {
