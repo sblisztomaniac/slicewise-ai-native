@@ -1,0 +1,21 @@
+# Handle client-side routing for React/SPA
+/*    /index.html   200
+
+# Optional: Redirect API calls to external services
+/api/*  https://your-api-domain.com/api/:splat  200
+
+# Optional: Force HTTPS
+http://slicewise.netlify.app/*    https://slicewise.netlify.app/:splat  301!
+http://www.slicewise.netlify.app/*    https://slicewise.netlify.app/:splat  301!
+
+# Cache static assets for a year
+/assets/*    /assets/:splat  200
+  Cache-Control: public, max-age=31536000, immutable
+  Vary: Accept-Encoding
+
+# Security headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: no-referrer-when-downgrade
