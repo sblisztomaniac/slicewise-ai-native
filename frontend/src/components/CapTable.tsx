@@ -69,7 +69,7 @@ const CapTable: React.FC = () => {
                   </td>
                   <td className="px-4 py-4 text-sm font-medium text-right">
                     <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-800">
-                      {formatPercent(owner.percentage)}
+                      {formatPercent(owner.ownership / 100)}  
                     </span>
                   </td>
                 </motion.tr>

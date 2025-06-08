@@ -15,7 +15,7 @@ const OwnershipChart: React.FC<OwnershipChartProps> = ({ data }) => {
     labels: data.map(item => item.name),
     datasets: [
       {
-        data: data.map(item => item.percentage),
+        data: data.map(item => item.ownership),
         backgroundColor: data.map(item => item.color),
         borderColor: data.map(item => item.color),
         borderWidth: 1,

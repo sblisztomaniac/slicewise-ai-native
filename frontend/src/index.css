@@ -42,3 +42,24 @@ input[type="number"]::-webkit-inner-spin-button {
 .recharts-pie-sector {
   transition: all 0.3s ease;
 }
+/* Add this to your index.css or at the top of a component */
+
+/* Fix for tooltip z-index issues */
+.tooltip-container {
+  position: relative;
+  z-index: 999;
+}
+
+/* Ensure tooltips appear above other elements */
+.tooltip-content {
+  z-index: 1000 !important;
+  position: absolute !important;
+}
+
+/* Alternative: Add higher z-index to help tooltips specifically */
+[role="tooltip"], 
+.tooltip,
+.help-tooltip {
+  z-index: 1000 !important;
+  position: relative !important;
+}

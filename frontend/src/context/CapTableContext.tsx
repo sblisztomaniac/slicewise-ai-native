@@ -1,20 +1,23 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { Founder, Safe, OwnershipData } from '../types';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import { Founder, Safe, OwnershipData, FundingRound } from '../types';
 import { generateId, calculateOwnership } from '../utils/helpers';
 
 interface CapTableContextType {
   founders: Founder[];
   safe: Safe | null;
   ownershipData: OwnershipData[];
+  totalShares: number;
+  fundingRounds: FundingRound[];
+  lastExplanation: string | null;
   addFounder: (name: string, shares: number) => void;
-  updateFounder: (id: string, name: string, shares: number) => void;
+  updateFounder: (id: string, updates: Partial<Founder>) => void;
   removeFounder: (id: string) => void;
-  addSafe: (name: string, amount: number, valuationCap: number) => void;
-  updateSafe: (name: string, amount: number, valuationCap: number) => void;
-  removeSafe: () => void;
+  setSafe: (newSafe: Safe | null) => void;
   clearTable: () => void;
   loadSampleData: () => void;
-  totalShares: number;
+  addFundingRound: (round: Omit<FundingRound, 'id' | 'shares' | 'ownershipPercentage'>, explanationStyle?: '12yo' | 'mentor' | 'expert') => Promise<string>;
+  removeFundingRound: (id: string) => void;
+  explainRoundImpact: (round: FundingRound, style?: '12yo' | 'mentor' | 'expert') => Promise<string>;
 }
 
 const CapTableContext = createContext<CapTableContextType | undefined>(undefined);
@@ -33,94 +36,192 @@ const COLORS = [
 
 export const CapTableProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [founders, setFounders] = useState<Founder[]>([]);
-  const [safe, setSafe] = useState<Safe | null>(null);
+  const [safe, _setSafe] = useState<Safe | null>(null);
+  const [fundingRounds, setFundingRounds] = useState<FundingRound[]>([]);
   const [ownershipData, setOwnershipData] = useState<OwnershipData[]>([]);
   const [totalShares, setTotalShares] = useState<number>(0);
+  const [lastExplanation, setLastExplanation] = useState<string | null>(null);
+  
+  // Update ownership data whenever founders, safe, or funding rounds change
+  const updateOwnershipData = useCallback(() => {
+    const { ownershipData: newOwnershipData, totalShares: newTotalShares } = 
+      calculateOwnership(founders, safe, fundingRounds, COLORS);
+    setOwnershipData(newOwnershipData);
+    setTotalShares(newTotalShares);
+  }, [founders, safe, fundingRounds]);
 
+  // Recalculate ownership when dependencies change
   useEffect(() => {
-    // Calculate ownership percentages whenever founders or SAFE changes
     updateOwnershipData();
-  }, [founders, safe]);
+  }, [updateOwnershipData]);
+  
+  // Wrapped setSafe to ensure ownership data is updated when safe changes
+  const setSafe = useCallback((newSafe: Safe | null) => {
+    _setSafe(newSafe);
+  }, []);
 
-  const updateOwnershipData = () => {
-    const { ownershipData: newData, totalShares: newTotal } = calculateOwnership(founders, safe, COLORS);
-    setOwnershipData(newData);
-    setTotalShares(newTotal);
-  };
+  const explainRoundImpact = useCallback(async (round: FundingRound, style: '12yo' | 'mentor' | 'expert' = 'mentor'): Promise<string> => {
+    try {
+      const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+      if (!apiKey) {
+        return "API key is missing. Please add VITE_OPENROUTER_API_KEY to your .env file.";
+      }
 
-  const addFounder = (name: string, shares: number) => {
+      let styleInstruction = '';
+      switch (style) {
+        case '12yo':
+          styleInstruction = 'Explain this like I\'m 12 years old. Use simple analogies and avoid financial jargon.';
+          break;
+        case 'mentor':
+          styleInstruction = 'Explain this to a startup founder. Be clear and practical, with actionable insights.';
+          break;
+        case 'expert':
+          styleInstruction = 'Provide a detailed financial analysis with precise calculations and industry benchmarks.';
+          break;
+      }
+
+      const prompt = `You are a startup equity expert. ${styleInstruction}
+
+New Round: ${round.name}
+Amount: $${round.amount.toLocaleString()}
+Valuation: $${round.valuation.toLocaleString()}
+Shares Issued: ${round.shares.toLocaleString()}
+Ownership: ${round.ownershipPercentage.toFixed(2)}%
+
+Current Cap Table:
+- Founders: ${founders.length} founders with ${founders.reduce((sum, f) => sum + f.shares, 0).toLocaleString()} shares
+- SAFE: ${safe ? 'Yes' : 'No'}
+- Previous Rounds: ${fundingRounds.length}
+- Total Shares: ${totalShares.toLocaleString()}
+
+Explain the dilution impact and what this means for existing shareholders.`;
+
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "mistralai/mixtral-8x7b-instruct",
+          messages: [{
+            role: "user",
+            content: prompt
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const explanation = data.choices?.[0]?.message?.content || "No explanation generated";
+      setLastExplanation(explanation);
+      return explanation;
+    } catch (error) {
+      console.error("Error generating explanation:", error);
+      return "Sorry, I couldn't generate an explanation. Please try again later.";
+    }
+  }, [founders, fundingRounds.length, safe, totalShares]);
+
+  const addFundingRound = useCallback(async (round: Omit<FundingRound, 'id' | 'shares' | 'ownershipPercentage'>, explanationStyle: '12yo' | 'mentor' | 'expert' = 'mentor'): Promise<string> => {
+    try {
+      // For the first round, use a default total shares if none exist
+      const currentTotalShares = totalShares || 10000000; // Default 10M shares if no shares exist yet
+      
+      // Calculate shares based on post-money valuation
+      const newShares = Math.round((round.amount / round.valuation) * currentTotalShares);
+      const ownershipPercentage = (newShares / (currentTotalShares + newShares)) * 100;
+
+      const newRound: FundingRound = {
+        ...round,
+        id: generateId(),
+        shares: newShares,
+        ownershipPercentage,
+        date: round.date || new Date().toISOString(),
+        // Include SAFE-specific fields if they exist
+        ...(round.type === 'safe' && {
+          valuationCap: (round as any).valuationCap,
+          discountRate: (round as any).discountRate,
+          safeType: (round as any).safeType || 'cap-only'
+        })
+      };
+
+      // Add the round
+      setFundingRounds(prevRounds => [...prevRounds, newRound]);
+
+      // Trigger explanation with the selected style
+      const explanation = await explainRoundImpact(newRound, explanationStyle);
+      
+      return explanation;
+    } catch (error) {
+      console.error("Error adding funding round:", error);
+      throw error;
+    }
+  }, [totalShares, explainRoundImpact]);
+
+  const addFounder = useCallback((name: string, shares: number) => {
     const newFounder: Founder = {
       id: generateId(),
       name,
       shares,
     };
-    setFounders([...founders, newFounder]);
-  };
+    setFounders(prev => [...prev, newFounder]);
+  }, []);
 
-  const updateFounder = (id: string, name: string, shares: number) => {
-    setFounders(
-      founders.map((founder) =>
-        founder.id === id ? { ...founder, name, shares } : founder
+  const updateFounder = useCallback((id: string, updates: Partial<Founder>) => {
+    setFounders(prev =>
+      prev.map(founder =>
+        founder.id === id ? { ...founder, ...updates } : founder
       )
     );
-  };
+  }, []);
 
-  const removeFounder = (id: string) => {
-    setFounders(founders.filter((founder) => founder.id !== id));
-  };
+  const removeFounder = useCallback((id: string) => {
+    setFounders(prev => prev.filter((founder) => founder.id !== id));
+  }, []);
 
-  const addSafe = (name: string, amount: number, valuationCap: number) => {
-    setSafe({
-      id: generateId(),
-      name,
-      amount,
-      valuationCap,
-    });
-  };
-
-  const updateSafe = (name: string, amount: number, valuationCap: number) => {
-    if (safe) {
-      setSafe({
-        ...safe,
-        name,
-        amount,
-        valuationCap,
-      });
-    } else {
-      addSafe(name, amount, valuationCap);
-    }
-  };
-
-  const removeSafe = () => {
-    setSafe(null);
-  };
-
-  const clearTable = () => {
+  const clearTable = useCallback(() => {
     setFounders([]);
-    setSafe(null);
-  };
+    _setSafe(null);
+    setFundingRounds([]);
+    setLastExplanation(null);
+  }, []);
 
-  const loadSampleData = () => {
+  const loadSampleData = useCallback(() => {
+    // Clear existing data first
+    clearTable();
+    
+    // Add 2 founders
+    const founder1Id = generateId();
+    const founder2Id = generateId();
+    
     setFounders([
       {
-        id: generateId(),
-        name: 'Nova (CEO)',
-        shares: 1000000,
+        id: founder1Id,
+        name: 'Founder 1 (CEO)',
+        shares: 4500000, // 45%
       },
       {
-        id: generateId(),
-        name: 'Alex (CTO)',
-        shares: 750000,
+        id: founder2Id,
+        name: 'Founder 2 (CTO)',
+        shares: 4500000, // 45%
       },
     ]);
 
-    setSafe({
+    // Add SAFE (10% of company post-money)
+    _setSafe({
       id: generateId(),
-      name: 'First Round Capital',
-      amount: 250000,
-      valuationCap: 4000000,
+      name: 'Angel Investor SAFE',
+      amount: 500000, // $500k
+      valuationCap: 5000000, // $5M cap
     });
-  };
+  }, [clearTable]);
+
+  const removeFundingRound = useCallback((id: string) => {
+    setFundingRounds(prevRounds => prevRounds.filter(round => round.id !== id));
+  }, []);
 
   return (
     <CapTableContext.Provider
@@ -128,15 +229,18 @@ export const CapTableProvider: React.FC<{ children: ReactNode }> = ({ children }
         founders,
         safe,
         ownershipData,
+        totalShares,
+        fundingRounds,
+        lastExplanation,
         addFounder,
         updateFounder,
         removeFounder,
-        addSafe,
-        updateSafe,
-        removeSafe,
+        setSafe,
         clearTable,
         loadSampleData,
-        totalShares,
+        addFundingRound,
+        removeFundingRound,
+        explainRoundImpact,
       }}
     >
       {children}
