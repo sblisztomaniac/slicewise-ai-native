@@ -1,15 +1,9 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+# Handle client-side routing for React/SPA
+/*    /index.html   200
 
-export default defineConfig({
-  plugins: [react()],
-  build: {
-    outDir: 'build', // Change from 'dist' to 'build' for consistency
-  },
-  // Ensure proper base path for Netlify
-  base: '/',
-  // Handle client-side routing
-  server: {
-    historyApiFallback: true,
-  }
-})
+# Security headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: no-referrer-when-downgrade
