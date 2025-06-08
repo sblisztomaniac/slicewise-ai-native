@@ -42,16 +42,6 @@ export const CapTableProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [totalShares, setTotalShares] = useState<number>(0);
   const [lastExplanation, setLastExplanation] = useState<string | null>(null);
   
-  // Wrapped setSafe to ensure ownership data is updated when safe changes
-  const setSafe = useCallback((newSafe: Safe | null) => {
-    _setSafe(newSafe);
-    // Trigger ownership data update after state is set
-    const { ownershipData: newOwnershipData, totalShares: newTotalShares } = 
-      calculateOwnership(founders, newSafe, fundingRounds, COLORS);
-    setOwnershipData(newOwnershipData);
-    setTotalShares(newTotalShares);
-  }, [founders, fundingRounds]);
-  
   // Update ownership data whenever founders, safe, or funding rounds change
   const updateOwnershipData = useCallback(() => {
     const { ownershipData: newOwnershipData, totalShares: newTotalShares } = 
@@ -64,6 +54,11 @@ export const CapTableProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     updateOwnershipData();
   }, [updateOwnershipData]);
+  
+  // Wrapped setSafe to ensure ownership data is updated when safe changes
+  const setSafe = useCallback((newSafe: Safe | null) => {
+    _setSafe(newSafe);
+  }, []);
 
   const explainRoundImpact = useCallback(async (round: FundingRound, style: '12yo' | 'mentor' | 'expert' = 'mentor'): Promise<string> => {
     try {
@@ -144,22 +139,17 @@ Explain the dilution impact and what this means for existing shareholders.`;
         id: generateId(),
         shares: newShares,
         ownershipPercentage,
-        date: round.date || new Date().toISOString()
+        date: round.date || new Date().toISOString(),
+        // Include SAFE-specific fields if they exist
+        ...(round.type === 'safe' && {
+          valuationCap: (round as any).valuationCap,
+          discountRate: (round as any).discountRate,
+          safeType: (round as any).safeType || 'cap-only'
+        })
       };
 
-      // Add the round and update state
-      setFundingRounds(prevRounds => {
-        const updatedRounds = [...prevRounds, newRound];
-        // Update ownership data after state is updated
-        setTimeout(() => {
-          const { ownershipData } = calculateOwnership(founders, safe, updatedRounds, COLORS);
-          setOwnershipData(ownershipData);
-        }, 0);
-        return updatedRounds;
-      });
-
-      // Update total shares
-      setTotalShares(prev => prev + newShares);
+      // Add the round
+      setFundingRounds(prevRounds => [...prevRounds, newRound]);
 
       // Trigger explanation with the selected style
       const explanation = await explainRoundImpact(newRound, explanationStyle);
@@ -169,39 +159,37 @@ Explain the dilution impact and what this means for existing shareholders.`;
       console.error("Error adding funding round:", error);
       throw error;
     }
-  }, [totalShares, founders, safe, explainRoundImpact]);
+  }, [totalShares, explainRoundImpact]);
 
-
-
-  const addFounder = (name: string, shares: number) => {
+  const addFounder = useCallback((name: string, shares: number) => {
     const newFounder: Founder = {
       id: generateId(),
       name,
       shares,
     };
-    setFounders([...founders, newFounder]);
-  };
+    setFounders(prev => [...prev, newFounder]);
+  }, []);
 
-  const updateFounder = (id: string, updates: Partial<Founder>) => {
+  const updateFounder = useCallback((id: string, updates: Partial<Founder>) => {
     setFounders(prev =>
       prev.map(founder =>
         founder.id === id ? { ...founder, ...updates } : founder
       )
     );
-  };
+  }, []);
 
-  const removeFounder = (id: string) => {
-    setFounders(founders.filter((founder) => founder.id !== id));
-  };
+  const removeFounder = useCallback((id: string) => {
+    setFounders(prev => prev.filter((founder) => founder.id !== id));
+  }, []);
 
   const clearTable = useCallback(() => {
     setFounders([]);
-    setSafe(null);
+    _setSafe(null);
     setFundingRounds([]);
     setLastExplanation(null);
   }, []);
 
-  const loadSampleData = () => {
+  const loadSampleData = useCallback(() => {
     // Clear existing data first
     clearTable();
     
@@ -223,30 +211,17 @@ Explain the dilution impact and what this means for existing shareholders.`;
     ]);
 
     // Add SAFE (10% of company post-money)
-    setSafe({
+    _setSafe({
       id: generateId(),
       name: 'Angel Investor SAFE',
       amount: 500000, // $500k
       valuationCap: 5000000, // $5M cap
     });
-    
-    // Note: ESOP pool would be 10% (1,000,000 shares) but not allocated to any specific person
-    // This would be part of the total shares calculation in the ownership model
-  };
+  }, [clearTable]);
 
   const removeFundingRound = useCallback((id: string) => {
-    setFundingRounds(prevRounds => {
-      const updatedRounds = prevRounds.filter(round => round.id !== id);
-      // Update ownership data after state is updated
-      setTimeout(() => {
-        const { ownershipData: newOwnershipData, totalShares: newTotalShares } = 
-          calculateOwnership(founders, safe, updatedRounds, COLORS);
-        setOwnershipData(newOwnershipData);
-        setTotalShares(newTotalShares);
-      }, 0);
-      return updatedRounds;
-    });
-  }, [founders, safe]);
+    setFundingRounds(prevRounds => prevRounds.filter(round => round.id !== id));
+  }, []);
 
   return (
     <CapTableContext.Provider

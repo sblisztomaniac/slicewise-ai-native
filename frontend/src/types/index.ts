@@ -25,12 +25,16 @@ export interface OwnershipData {
 export type FundingRound = {
   id: string;
   name: string;
-  type: 'pre-seed' | 'seed' | 'series-a' | 'series-b' | 'series-c' | 'series-d' | 'series-e' | 'series-f' | 'series-g' | 'series-h' | 'other';
+  type: 'pre-seed' | 'seed' | 'series-a' | 'series-b' | 'series-c' | 'series-d' | 'series-e' | 'series-f' | 'series-g' | 'series-h' | 'other' | 'safe';
   amount: number;
   valuation: number;
   date: string;
   shares: number;
   ownershipPercentage: number;
+  // SAFE-specific fields
+  valuationCap?: number;
+  discountRate?: number;
+  safeType?: 'cap-only' | 'discount-only' | 'cap-and-discount' | 'mfn';
 };
 
 export type RoundType = FundingRound['type'];

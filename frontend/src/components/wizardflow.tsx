@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Users, DollarSign, PieChart, MessageSquare, Lightbulb, Play, RefreshCw, PlusCircle } from 'lucide-react';
 import { useCapTable } from '../context/CapTableContext';
@@ -24,6 +24,23 @@ const WizardFlow: React.FC = () => {
   const [showAICopilot, setShowAICopilot] = useState(false);
   const { founders, safe, fundingRounds, ownershipData, loadSampleData, clearTable } = useCapTable();
 
+  // Navigation functions
+  const nextStep = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const goToStep = (stepIndex: number) => {
+    setCurrentStep(stepIndex);
+  };
+
   // Define the steps - NOW ALL ARE ACCESSIBLE ANYTIME
   const steps: Step[] = [
     {
@@ -31,7 +48,7 @@ const WizardFlow: React.FC = () => {
       title: "Add Founders",
       description: "Start by adding your founding team and their initial equity allocation",
       icon: <Users className="w-5 h-5" />,
-      component: <EquityInput />,
+      component: <EquityInput onNext={nextStep} />,
       isAccessible: true // Always accessible
     },
     {
@@ -134,36 +151,11 @@ const WizardFlow: React.FC = () => {
     }
   ];
 
-  // Auto-advance logic (but users can still jump around)
-  useEffect(() => {
-    if (currentStep === 0 && founders.length > 0) {
-      const timer = setTimeout(() => {
-        if (currentStep === 0) {
-          setCurrentStep(1);
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [founders.length, currentStep]);
-
-  const nextStep = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const prevStep = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const goToStep = (stepIndex: number) => {
-    setCurrentStep(stepIndex);
-  };
-
+  // Current step data and state
   const currentStepData = steps[currentStep];
   const hasData = founders.length > 0 || safe || fundingRounds.length > 0;
+
+  // Removed auto-advance logic to let users control navigation
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
