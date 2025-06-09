@@ -8,9 +8,11 @@ const AICopilot: React.FC = () => {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedTone, setSelectedTone] = useState('mentor');
+    type ToneType = 'simple' | 'mentor' | 'expert';
+  
+  const [selectedTone, setSelectedTone] = useState<ToneType>('mentor');
 
-  const toneConfigs = {
+  const toneConfigs: Record<ToneType, { label: string; description: string; prompt: string }> = {
     'simple': {
       label: '12-Year-Old',
       description: 'Super simple, like explaining to a kid',
@@ -108,7 +110,7 @@ const AICopilot: React.FC = () => {
                   name="tone"
                   value={key}
                   checked={selectedTone === key}
-                  onChange={(e) => setSelectedTone(e.target.value)}
+                  onChange={(e) => setSelectedTone(e.target.value as ToneType)}
                   className="text-blue-600"
                 />
                 <div>

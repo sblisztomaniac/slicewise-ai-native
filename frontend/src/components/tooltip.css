@@ -1,0 +1,69 @@
+.tooltip {
+  position: absolute;
+  background-color: #1f2937;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  max-width: 280px;
+  z-index: 10000;
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: #1f2937;
+  transform: rotate(45deg);
+  z-index: 10001;
+}
+
+.tooltip-top::after {
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.tooltip-bottom::after {
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.tooltip-left::after {
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.tooltip-right::after {
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+@keyframes tooltipFadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tooltip {
+  animation: tooltipFadeIn 0.15s ease-out forwards;
+}
+
+/* For tooltips inside modals */
+.modal .tooltip {
+  z-index: 10001 !important;
+}
+
+/* Tooltip container */
+.tooltip-container {
+  display: inline-block;
+  position: relative;
+}
