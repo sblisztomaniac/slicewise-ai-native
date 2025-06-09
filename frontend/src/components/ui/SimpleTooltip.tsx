@@ -1,36 +1,38 @@
-import React from 'react';
-import Tooltip from '../tooltip';
+// frontend/src/components/ui/SimpleTooltip.tsx
+
+import React, { useState } from 'react';
+import { HelpCircle } from 'lucide-react';
 
 interface SimpleTooltipProps {
   text: string;
-  position?: 'top' | 'bottom' | 'left' | 'right';
-  children?: React.ReactNode;
   className?: string;
-  delay?: number;
+  iconSize?: number;
 }
 
-const SimpleTooltip: React.FC<SimpleTooltipProps> = ({ 
+export const SimpleTooltip: React.FC<SimpleTooltipProps> = ({ 
   text, 
-  position = 'top',
-  children,
-  className = '',
-  delay = 200
+  className = '', 
+  iconSize = 16 
 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
   return (
-    <div className={`relative inline-flex items-center ${className}`}>
-      {children || <span className="ml-1 text-gray-400 cursor-help hover:text-gray-600">ⓘ</span>}
-      <Tooltip 
-        content={text} 
-        position={position}
-        className={className}
-        delay={delay}
-      >
-        <div className="tooltip-content">
+    <span 
+      className={`relative inline-block ml-1 ${className}`}
+      onMouseEnter={() => setIsVisible(true)}
+      onMouseLeave={() => setIsVisible(false)}
+    >
+      <HelpCircle 
+        size={iconSize} 
+        className="text-blue-500 hover:text-blue-700 cursor-help transition-colors" 
+      />
+      
+      {isVisible && (
+        <div className="absolute z-[10000] bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-sm text-white bg-blue-600 rounded-lg shadow-lg max-w-xs whitespace-normal pointer-events-none">
           {text}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-blue-600"></div>
         </div>
-      </Tooltip>
-    </div>
+      )}
+    </span>
   );
 };
-
-export default SimpleTooltip;

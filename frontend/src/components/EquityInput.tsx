@@ -1,323 +1,547 @@
-import { useCallback, useState, FC } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Plus, Trash2, Sparkles, CheckCircle, DollarSign, ArrowRight } from 'lucide-react';
+// frontend/src/components/EquityInput.tsx
+
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCapTable } from '../context/CapTableContext';
+import { generateId } from '../utils/helpers';
+import { PlusCircle, Trash2, HelpCircle, DollarSign } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { formatCurrency, validateNumberInput, formatNumberInput } from '../utils/helpers';
 
-interface FounderInput {
-  name: string;
-  shares: string;
-}
+// Simple Tooltip Component
+const SimpleTooltip: React.FC<{ text: string }> = ({ text }) => {
+  const [isVisible, setIsVisible] = useState(false);
 
-interface EquityInputProps {
-  onNext?: () => void;
-}
+  return (
+    <span 
+      className="relative inline-block ml-1"
+      onMouseEnter={() => setIsVisible(true)}
+      onMouseLeave={() => setIsVisible(false)}
+    >
+      <HelpCircle size={16} className="text-blue-500 hover:text-blue-700 cursor-help transition-colors" />
+      
+      {isVisible && (
+        <div className="absolute z-[10000] bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-sm text-white bg-blue-600 rounded-lg shadow-lg max-w-xs whitespace-normal pointer-events-none">
+          {text}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-blue-600"></div>
+        </div>
+      )}
+    </span>
+  );
+};
 
-const EquityInputRedesigned: FC<EquityInputProps> = ({ onNext }) => {
+const EquityInput: React.FC = () => {
   const {
     founders,
     safe,
     addFounder,
     updateFounder,
     removeFounder,
-    setSafe
+    setSafe,
   } = useCapTable();
 
-  const [showHelp, setShowHelp] = useState(false);
-  const [newFounder, setNewFounder] = useState<FounderInput>({ name: '', shares: '' });
+  const [newFounder, setNewFounder] = useState({ name: '', shares: '' });
+  const [newSafe, setNewSafe] = useState({
+    name: '',
+    amount: '',
+    valuationCap: '',
+  });
+  const [errors, setErrors] = useState<{
+    founderShares?: string;
+    safeAmount?: string;
+    safeValuation?: string;
+    safeName?: string;
+    [key: string]: string | undefined;
+  }>({});
 
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  
+  // Validate founder shares input
+  const validateFounderShares = (value: string): boolean => {
+    const { isValid, error } = validateNumberInput(value, {
+      required: true,
+      min: 1,
+      isInteger: true,
+      max: 1000000000 // 1 billion max shares
+    });
+    
+    setErrors(prev => ({
+      ...prev,
+      founderShares: isValid ? undefined : error
+    }));
+    
+    return isValid;
+  };
+  
+  // Validate SAFE amount input
+  const validateSafeAmount = (value: string): boolean => {
+    const { isValid, error } = validateNumberInput(value, {
+      required: true,
+      min: 1,
+      max: 1000000000000 // 1 trillion max
+    });
+    
+    setErrors(prev => ({
+      ...prev,
+      safeAmount: isValid ? undefined : error
+    }));
+    
+    return isValid;
+  };
+  
+  // Validate SAFE valuation cap input
+  const validateSafeValuation = (value: string): boolean => {
+    const { isValid, error } = validateNumberInput(value, {
+      required: true,
+      min: 1000, // At least $1,000
+      max: 1000000000000 // 1 trillion max
+    });
+    
+    setErrors(prev => ({
+      ...prev,
+      safeValuation: isValid ? undefined : error
+    }));
+    
+    return isValid;
+  };
+
+  // Handle number input formatting
+  const handleNumberInput = useCallback((e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+    const { value } = e.target;
+    const formattedValue = formatNumberInput(value);
+    
+    if (field === 'amount') {
+      setNewSafe(prev => ({ ...prev, amount: formattedValue }));
+      if (formattedValue) validateSafeAmount(formattedValue);
+    } else if (field === 'valuationCap') {
+      setNewSafe(prev => ({ ...prev, valuationCap: formattedValue }));
+      if (formattedValue) validateSafeValuation(formattedValue);
+    }
+  }, []);
+
+  // Handle adding founder
   const handleAddFounder = useCallback(() => {
-    if (newFounder.name && newFounder.shares) {
+    if (!newFounder.name.trim()) {
+      setErrors(prev => ({ ...prev, founderName: 'Name is required' }));
+      return;
+    }
+
+    if (!newFounder.shares || !validateFounderShares(newFounder.shares)) {
+      return;
+    }
+
+    try {
       const shares = parseInt(newFounder.shares.replace(/,/g, ''), 10);
       if (!isNaN(shares)) {
         addFounder(newFounder.name, shares);
         setNewFounder({ name: '', shares: '' });
+        // Clear any errors
+        setErrors(prev => ({
+          ...prev,
+          founderName: undefined,
+          founderShares: undefined
+        }));
       }
+    } catch (error) {
+      console.error('Error adding founder:', error);
+      setErrors(prev => ({
+        ...prev,
+        general: 'Failed to add founder. Please try again.'
+      }));
     }
   }, [newFounder, addFounder]);
 
-  const formatNumber = (num: number | string): string => {
-    const number = typeof num === 'string' ? parseInt(num.replace(/,/g, '')) || 0 : num;
-    return new Intl.NumberFormat().format(number);
-  };
+  // Handle updating founder
+  const handleUpdateFounder = useCallback((id: string, field: 'name' | 'shares', value: string) => {
+    const founderToUpdate = founders.find((f) => f.id === id);
+    if (!founderToUpdate) return;
+    
+    try {
+      if (field === 'shares') {
+        const { isValid } = validateNumberInput(value, {
+          required: true,
+          min: 1,
+          isInteger: true,
+          max: 1000000000
+        });
+        
+        if (!isValid) return;
+        
+        // Format the number before updating
+        const formattedValue = formatNumberInput(value);
+        updateFounder(id, {
+          ...founderToUpdate,
+          shares: Number(formattedValue.replace(/,/g, ''))
+        });
+      } else {
+        // For name field
+        if (!value.trim()) {
+          setErrors(prev => ({
+            ...prev,
+            [`founderName_${id}`]: 'Name cannot be empty'
+          }));
+          return;
+        }
+        updateFounder(id, {
+          ...founderToUpdate,
+          name: value
+        });
+      }
+    } catch (error) {
+      console.error('Error updating founder:', error);
+      setErrors(prev => ({
+        ...prev,
+        general: 'Failed to update founder. Please try again.'
+      }));
+    }
+  }, [founders, updateFounder]);
 
-  const NovaAvatar = () => (
-    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-      <Sparkles className="w-6 h-6 text-white" />
-    </div>
-  );
+  // Handle adding or updating SAFE
+  const handleAddOrUpdateSafe = useCallback(() => {
+    const isAmountValid = validateSafeAmount(newSafe.amount);
+    const isValuationValid = validateSafeValuation(newSafe.valuationCap);
+    
+    if (!newSafe.name.trim()) {
+      setErrors(prev => ({
+        ...prev,
+        safeName: 'SAFE name is required'
+      }));
+      return;
+    }
+    
+    if (!isAmountValid || !isValuationValid) return;
+    
+    try {
+      setSafe({
+        id: safe?.id || generateId(),
+        name: newSafe.name,
+        amount: Number(newSafe.amount.replace(/,/g, '')),
+        valuationCap: Number(newSafe.valuationCap.replace(/,/g, ''))
+      });
+      
+      setNewSafe({ name: '', amount: '', valuationCap: '' });
+      
+      // Clear any previous errors
+      setErrors(prev => ({
+        ...prev,
+        safeName: undefined,
+        safeAmount: undefined,
+        safeValuation: undefined
+      }));
+    } catch (error) {
+      console.error('Error adding SAFE:', error);
+      setErrors(prev => ({
+        ...prev,
+        general: 'Failed to add SAFE. Please try again.'
+      }));
+    }
+  }, [newSafe, safe?.id, setSafe]);
+
+  // Handle Enter key to add founder
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && newFounder.name && newFounder.shares) {
+      e.preventDefault();
+      handleAddFounder();
+    }
+  }, [newFounder, handleAddFounder]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Progress Header */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="flex space-x-2">
-              {['Define Ownership', 'Add Funding Round', 'View Results'].map((step, idx) => (
-                <div key={step} className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                    idx === 0 ? 'bg-blue-600 text-white' : 
-                    idx === 1 ? 'bg-gray-200 text-gray-600' : 'bg-gray-100 text-gray-400'
-                  }`}>
-                    {idx === 0 ? <CheckCircle className="w-4 h-4" /> : idx + 1}
-                  </div>
-                  {idx < 2 && <div className="w-12 h-0.5 bg-gray-200 mx-2" />}
-                </div>
-              ))}
-            </div>
-            <button 
-              onClick={() => setShowHelp(!showHelp)}
-              className="ml-auto bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-full text-sm font-medium transition-colors"
-            >
-              I'm ready, simulate my cap table →
-            </button>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Story & Help */}
-          <div className="lg:col-span-1 space-y-6">
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
-            >
-              <div className="flex items-start space-x-4 mb-4">
-                <NovaAvatar />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1">Nova</h3>
-                  <p className="text-sm text-gray-600">Your equity copilot</p>
-                </div>
-              </div>
-              
-              <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                <p className="text-blue-800 text-sm leading-relaxed">
-                  🎯 <strong>Let's start simple:</strong> Who are the people building this company? 
-                  I'll help you understand how ownership changes when you raise money.
-                </p>
-                
-                <button 
-                  onClick={() => setShowHelp(!showHelp)}
-                  className="mt-3 text-blue-600 text-sm underline hover:text-blue-800"
-                >
-                  How does equity actually work? →
-                </button>
-              </div>
-
-              <AnimatePresence>
-                {showHelp && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="mt-4 p-4 bg-gray-50 rounded-xl border"
-                  >
-                    <h4 className="font-medium text-gray-900 mb-2">Quick Equity 101</h4>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      <li>• <strong>Shares</strong> = pieces of your company pie</li>
-                      <li>• <strong>%</strong> = your slice of that pie</li>
-                      <li>• <strong>Funding</strong> = making the pie bigger (but your slice smaller)</li>
-                    </ul>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            {/* Quick Stats */}
-            <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-4">Your Company Today</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Founders</span>
-                  <span className="font-semibold">{founders.length}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total Shares</span>
-                  <span className="font-semibold">{formatNumber(founders.reduce((sum, f) => sum + f.shares, 0))}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">SAFE Investment</span>
-                  <span className="font-semibold">{safe ? '$' + formatNumber(safe.amount) : 'None'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column - Interactive Form */}
-          <div className="lg:col-span-2">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
-            >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
-                <div className="flex items-center space-x-3">
-                  <Users className="w-6 h-6" />
-                  <div>
-                    <h2 className="text-xl font-bold">Meet Your Founding Team</h2>
-                    <p className="text-blue-100 text-sm">Enter the owners of your startup and current equity allocation</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-6">
-                {/* Existing Founders */}
-                <div className="space-y-4 mb-6">
-                  {founders.map((founder, idx) => (
-                    <motion.div
-                      key={founder.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="flex items-center space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-200 transition-colors"
+    <div 
+      id="equity-input" 
+      className="bg-white rounded-lg shadow-md p-6 mb-8"
+    >
+      <h2 className="text-2xl font-bold text-blue-900 mb-6">Equity & Ownership</h2>
+      
+      {/* Founders Section */}
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold text-blue-800 mb-3 flex items-center">
+          Founders
+          <SimpleTooltip text="Add the founding team members and their initial share allocation. These shares represent ownership before any investment." />
+        </h3>
+        
+        {/* Existing Founders Table */}
+        <div className="overflow-x-auto mb-4">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Shares
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {founders.map((founder) => (
+                <tr key={founder.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <input
+                      type="text"
+                      value={founder.name}
+                      onChange={(e) => handleUpdateFounder(founder.id, 'name', e.target.value)}
+                      className="w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <input
+                      type="text"
+                      value={formatNumberInput(founder.shares.toString())}
+                      onChange={(e) => handleUpdateFounder(founder.id, 'shares', e.target.value)}
+                      className="w-full text-right border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <button
+                      onClick={() => removeFounder(founder.id)}
+                      className="text-red-600 hover:text-red-800 transition-colors"
+                      title="Remove founder"
                     >
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Users className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div className="flex-1 grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-medium text-gray-500 block mb-1">Name</label>
-                          <input
-                            type="text"
-                            value={founder.name}
-                            onChange={(e) => {
-                              updateFounder(founder.id, { name: e.target.value });
-                            }}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-medium text-gray-500 block mb-1">Shares</label>
-                          <input
-                            type="text"
-                            value={formatNumber(Number(founder.shares))}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/,/g, '');
-                              const numValue = parseInt(value, 10);
-                              if (!isNaN(numValue)) {
-                                updateFounder(founder.id, { shares: numValue });
-                              }
-                            }}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeFounder(founder.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-2"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </motion.div>
-                  ))}
-                </div>
-
-                {/* Add New Founder */}
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 hover:border-blue-300 transition-colors">
-                  <div className="text-center mb-4">
-                    <Plus className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <h3 className="font-medium text-gray-900">Add another founder</h3>
-                    <p className="text-gray-500 text-sm">Co-founders, technical founders, etc.</p>
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              
+              {/* Add New Founder Row */}
+              <tr className="bg-blue-50">
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <input
+                    type="text"
+                    value={newFounder.name}
+                    onChange={(e) => {
+                      setNewFounder(prev => ({ ...prev, name: e.target.value }));
+                      if (errors.founderName) {
+                        setErrors(prev => ({ ...prev, founderName: undefined }));
+                      }
+                    }}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Founder name"
+                    className="w-full border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {errors.founderName && (
+                    <div className="text-xs text-red-500 mt-1">{errors.founderName}</div>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-right">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={newFounder.shares}
+                      onChange={(e) => {
+                        const formattedValue = formatNumberInput(e.target.value);
+                        setNewFounder(prev => ({ ...prev, shares: formattedValue }));
+                        if (formattedValue) validateFounderShares(formattedValue);
+                      }}
+                      onKeyPress={handleKeyPress}
+                      placeholder="1,000,000"
+                      className={`w-full text-right border-gray-200 rounded p-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.founderShares ? 'border-red-500' : ''
+                      }`}
+                    />
+                    {errors.founderShares && (
+                      <div className="text-xs text-red-500 mt-1">{errors.founderShares}</div>
+                    )}
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 block mb-2">Founder name</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., Alex Chen"
-                        value={newFounder.name}
-                        onChange={(e) => setNewFounder((prev: FounderInput) => ({ ...prev, name: e.target.value }))}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 block mb-2">Shares</label>
-                      <input
-                        type="text"
-                        placeholder="1,000,000"
-                        value={newFounder.shares}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9,]/g, '');
-                          setNewFounder((prev: FounderInput) => ({ ...prev, shares: value }));
-                        }}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  
+                </td>
+                <td className="px-4 py-3 text-sm text-right">
                   <button
                     onClick={handleAddFounder}
                     disabled={!newFounder.name || !newFounder.shares}
-                    className={`w-full py-3 px-4 rounded-lg font-medium transition-all ${
-                      newFounder.name && newFounder.shares
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl'
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    className={`flex items-center justify-center rounded-full p-1 transition-colors ${
+                      !newFounder.name || !newFounder.shares
+                        ? 'text-gray-400'
+                        : 'text-blue-600 hover:text-blue-800 hover:bg-blue-100'
                     }`}
                   >
-                    <Plus className="w-4 h-4 inline mr-2" />
-                    Add Founder
+                    <PlusCircle size={18} />
                   </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div className="flex gap-2">
+          <button
+            onClick={handleAddFounder}
+            disabled={!newFounder.name || !newFounder.shares}
+            className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+              !newFounder.name || !newFounder.shares
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            <PlusCircle size={18} className="mr-2" />
+            Add Founder
+          </button>
+          
+          {founders.length > 0 && (
+            <div className="text-sm text-gray-600 flex items-center">
+              Total founders: {founders.length}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* SAFE Investment Section - ENHANCED WITH ADD-BACK FUNCTIONALITY */}
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold text-blue-800 mb-3 flex items-center">
+          SAFE Investment
+          <SimpleTooltip text="A SAFE (Simple Agreement for Future Equity) lets investors give you money now in exchange for equity in your next funding round. Example: $500K at $5M cap means they get equity based on whichever is better for them - the $5M cap or your next round's valuation." />
+        </h3>
+        
+        {safe ? (
+          /* Existing SAFE Display */
+          <div className="bg-teal-50 p-4 rounded-lg border border-teal-200">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h4 className="font-medium text-teal-900 mb-2 flex items-center">
+                  {safe.name}
+                  <SimpleTooltip text="This SAFE will convert to equity shares when you do your next funding round." />
+                </h4>
+                <p className="text-teal-700 text-sm mb-2">
+                  <strong>Amount:</strong> {formatCurrency(safe.amount)}
+                </p>
+                <p className="text-teal-700 text-sm">
+                  <strong>Valuation Cap:</strong> {formatCurrency(safe.valuationCap)}
+                </p>
+                <div className="mt-3 p-2 bg-teal-100 rounded text-xs text-teal-800">
+                  💡 This converts to equity in your next funding round at the better of: ${safe.valuationCap.toLocaleString()} cap or the next round's valuation.
                 </div>
+              </div>
+              <button
+                onClick={() => {
+                  setSafe(null);
+                  // IMPORTANT: Reset the form when SAFE is deleted
+                  setNewSafe({ name: '', amount: '', valuationCap: '' });
+                  // Clear any errors
+                  setErrors(prev => ({
+                    ...prev,
+                    safeName: undefined,
+                    safeAmount: undefined,
+                    safeValuation: undefined
+                  }));
+                }}
+                className="text-teal-600 hover:text-red-600 transition-colors ml-4"
+                title="Remove SAFE"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* SAFE Add Form - Always Available When No SAFE */
+          <div className="border-2 border-dashed border-teal-200 rounded-lg p-6 bg-teal-50">
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <DollarSign className="w-6 h-6 text-teal-600" />
+              </div>
+              <h4 className="font-medium text-teal-900">Add a SAFE Investment</h4>
+              <p className="text-teal-700 text-sm mt-1">
+                Get money now, give equity later in your next funding round
+              </p>
+            </div>
 
-                {/* SAFE Section Preview */}
-                {safe && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-8 p-6 bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl border border-teal-200"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center space-x-3">
-                        <DollarSign className="w-6 h-6 text-teal-600" />
-                        <h3 className="font-semibold text-teal-900">SAFE Investment Active</h3>
-                      </div>
-                      <button
-                        onClick={() => setSafe(null)}
-                        className="text-teal-600 hover:text-teal-800 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <p className="text-teal-700 text-sm">
-                      <strong>{safe.name}</strong>: ${formatNumber(safe.amount)} at ${formatNumber(safe.valuationCap)} valuation cap
-                    </p>
-                    <div className="mt-3 text-xs text-teal-600">
-                      💡 This converts to equity in your next funding round
-                    </div>
-                  </motion.div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  SAFE Name
+                  <SimpleTooltip text="Give your SAFE a name like 'Angel Round' or 'Pre-Seed SAFE'" />
+                </label>
+                <input
+                  type="text"
+                  value={newSafe.name}
+                  onChange={(e) => {
+                    setNewSafe(prev => ({ ...prev, name: e.target.value }));
+                    if (errors.safeName) {
+                      setErrors(prev => ({ ...prev, safeName: undefined }));
+                    }
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="e.g., Angel Round"
+                />
+                {errors.safeName && (
+                  <p className="text-xs text-red-500 mt-1">{errors.safeName}</p>
                 )}
               </div>
 
-              {/* Footer */}
-              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
-                    {founders.length} founder{founders.length !== 1 ? 's' : ''} added
-                  </div>
-                  <button 
-                    onClick={onNext}
-                    disabled={!founders.length}
-                    className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
-                      founders.length 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    <span>Next: Add Investors</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Investment Amount ($)
+                    <SimpleTooltip text="How much money the investor is putting into your company" />
+                  </label>
+                  <input
+                    type="text"
+                    value={newSafe.amount}
+                    onChange={(e) => handleNumberInput(e, 'amount')}
+                    onFocus={() => setFocusedField('safe-amount')}
+                    onBlur={() => setFocusedField(null)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    placeholder="500,000"
+                  />
+                  {errors.safeAmount && (
+                    <p className="text-xs text-red-500 mt-1">{errors.safeAmount}</p>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Valuation Cap ($)
+                    <SimpleTooltip text="Maximum company value for conversion. Protects the investor if your company does really well." />
+                  </label>
+                  <input
+                    type="text"
+                    value={newSafe.valuationCap}
+                    onChange={(e) => handleNumberInput(e, 'valuationCap')}
+                    onFocus={() => setFocusedField('safe-valuation')}
+                    onBlur={() => setFocusedField(null)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    placeholder="5,000,000"
+                  />
+                  {errors.safeValuation && (
+                    <p className="text-xs text-red-500 mt-1">{errors.safeValuation}</p>
+                  )}
                 </div>
               </div>
-            </motion.div>
+
+              <button
+                onClick={handleAddOrUpdateSafe}
+                disabled={!newSafe.name || !newSafe.amount || !newSafe.valuationCap}
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                  !newSafe.name || !newSafe.amount || !newSafe.valuationCap
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-teal-600 text-white hover:bg-teal-700'
+                }`}
+              >
+                <PlusCircle size={18} className="inline mr-2" />
+                Add SAFE Investment
+              </button>
+              
+              {/* Educational Note */}
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-blue-800 text-sm">
+                  <strong>💡 How SAFEs work:</strong> You get ${newSafe.amount || 'money'} now. 
+                  When you raise your next round, this converts to equity at whichever price is better for the investor:
+                  the valuation cap (${newSafe.valuationCap || 'cap'}) or your next round's valuation.
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
+
+      {/* Error Display */}
+      {errors.general && (
+        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-800 text-sm">{errors.general}</p>
+        </div>
+      )}
     </div>
   );
 };
 
-export default EquityInputRedesigned;
+export default EquityInput;

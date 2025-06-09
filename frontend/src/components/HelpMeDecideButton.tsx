@@ -1,19 +1,22 @@
-import { FC } from 'react';
+// frontend/src/components/ui/HelpMeDecideButton.tsx
+
+import React from 'react';
 import { Sparkles } from 'lucide-react';
+import { RoundType } from '../../types/capTable';
 
 interface HelpMeDecideButtonProps {
   onSelect: (values: { amount: number; valuation: number }) => void;
-  roundType: string;
+  roundType: RoundType;
   className?: string;
 }
 
-const HelpMeDecideButton: FC<HelpMeDecideButtonProps> = ({ 
+export const HelpMeDecideButton: React.FC<HelpMeDecideButtonProps> = ({ 
   onSelect, 
   roundType,
   className = '' 
 }) => {
   // Default values for each round type
-  const suggestions: Record<string, { amount: number; valuation: number }> = {
+  const suggestions: Record<RoundType, { amount: number; valuation: number }> = {
     'pre-seed': { amount: 500000, valuation: 2000000 },
     'seed': { amount: 1500000, valuation: 6000000 },
     'series-a': { amount: 10000000, valuation: 40000000 },
@@ -24,6 +27,7 @@ const HelpMeDecideButton: FC<HelpMeDecideButtonProps> = ({
     'series-f': { amount: 200000000, valuation: 2000000000 },
     'series-g': { amount: 300000000, valuation: 4000000000 },
     'series-h': { amount: 400000000, valuation: 6000000000 },
+    'safe': { amount: 250000, valuation: 0 },
     'other': { amount: 5000000, valuation: 20000000 }
   };
 
@@ -32,16 +36,32 @@ const HelpMeDecideButton: FC<HelpMeDecideButtonProps> = ({
     onSelect(suggestion);
   };
 
+  const getRoundLabel = (type: RoundType): string => {
+    const labels: Record<RoundType, string> = {
+      'pre-seed': 'Pre-Seed',
+      'seed': 'Seed',
+      'series-a': 'Series A',
+      'series-b': 'Series B',
+      'series-c': 'Series C',
+      'series-d': 'Series D',
+      'series-e': 'Series E',
+      'series-f': 'Series F',
+      'series-g': 'Series G',
+      'series-h': 'Series H',
+      'safe': 'SAFE',
+      'other': 'Custom'
+    };
+    return labels[type] || 'Round';
+  };
+
   return (
     <button
       type="button"
       onClick={handleClick}
-      className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${className}`}
+      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${className}`}
     >
-      <Sparkles className="w-3 h-3 mr-1" />
-      Help me decide
+      <Sparkles className="w-4 h-4 mr-2" />
+      Suggest {getRoundLabel(roundType)} Numbers
     </button>
   );
 };
-
-export default HelpMeDecideButton;

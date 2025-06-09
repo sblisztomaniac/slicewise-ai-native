@@ -1,3 +1,5 @@
+/* frontend/src/index.css */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -42,24 +44,162 @@ input[type="number"]::-webkit-inner-spin-button {
 .recharts-pie-sector {
   transition: all 0.3s ease;
 }
-/* Add this to your index.css or at the top of a component */
 
-/* Fix for tooltip z-index issues */
+/* ============================================ */
+/* UNIFIED TOOLTIP STYLES - WORKING VERSION */
+/* ============================================ */
+
+/* Simple working tooltips */
+.simple-tooltip {
+  position: absolute;
+  z-index: 10000 !important;
+  pointer-events: none;
+  background: #1e40af;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 280px;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  line-height: 1.4;
+}
+
+.simple-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #1e40af;
+}
+
+.tooltip-trigger {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip-trigger:hover .simple-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Fix for modal tooltips specifically */
+.fixed .simple-tooltip,
+.modal .simple-tooltip {
+  z-index: 10001 !important;
+}
+
+/* Override any conflicting tooltip styles */
+[role="tooltip"], 
+.tooltip,
+.help-tooltip {
+  z-index: 10000 !important;
+}
+
+/* Remove conflicting old tooltip styles */
 .tooltip-container {
   position: relative;
   z-index: 999;
 }
 
-/* Ensure tooltips appear above other elements */
 .tooltip-content {
   z-index: 1000 !important;
   position: absolute !important;
 }
 
-/* Alternative: Add higher z-index to help tooltips specifically */
-[role="tooltip"], 
-.tooltip,
-.help-tooltip {
-  z-index: 1000 !important;
-  position: relative !important;
+/* ============================================ */
+/* SAFE SECTION STYLES */
+/* ============================================ */
+
+.safe-section {
+  transition: all 0.3s ease;
+}
+
+.safe-form-enter {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.safe-form-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 0.3s ease;
+}
+
+/* ============================================ */
+/* FORM VALIDATION STYLES */
+/* ============================================ */
+
+.error-input {
+  @apply border-red-300 ring-red-500;
+}
+
+.error-text {
+  @apply text-red-600 text-sm mt-1;
+}
+
+/* ============================================ */
+/* LOADING ANIMATIONS */
+/* ============================================ */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ============================================ */
+/* FOCUS STYLES */
+/* ============================================ */
+
+.focus-ring {
+  @apply focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+}
+
+/* ============================================ */
+/* ACCESSIBILITY IMPROVEMENTS */
+/* ============================================ */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .simple-tooltip {
+    border: 2px solid white;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .simple-tooltip,
+  .safe-section,
+  .recharts-pie-sector {
+    transition: none;
+  }
+  
+  .animate-spin {
+    animation: none;
+  }
 }
